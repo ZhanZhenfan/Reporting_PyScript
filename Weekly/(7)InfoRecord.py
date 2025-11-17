@@ -203,7 +203,7 @@ def main():
 
     result = tool.run_job(
         job_name="Lumileds BI - SC Purchase Order And Vendor Performance",  # 用完整精确名最稳妥
-        archive_dir=r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Master Data",
+        archive_dir=r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Master Data\Archive",
         timeout=1800,
         poll_interval=3,
         fuzzy=False,  # 若你 later 拿到读 sysjobs 的权限，可改 True

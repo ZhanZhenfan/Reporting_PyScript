@@ -19,7 +19,7 @@ downloaded_paths = down.download_latest_attachments(
     contains="ZMRP_WATERFALL_Run",
     ext=".xlsx",
     need_count=2,
-    days_back=90,
+    days_back=5,
     save_dir=SRC_DIR,           # 直接用你后续脚本的源目录
     mail_folder="inbox",        # 可不填；想限定收件箱就留着
 )
@@ -102,7 +102,7 @@ def main():
 
     result = tool.run_job(
         job_name="Lumileds BI - SC MRP Waterfall",  # 用完整精确名最稳妥
-        archive_dir=r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Temp Report",
+        archive_dir=r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall\Archive",
         timeout=1800,
         poll_interval=3,
         fuzzy=False,  # 若你 later 拿到读 sysjobs 的权限，可改 True

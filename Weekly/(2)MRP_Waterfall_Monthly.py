@@ -1,38 +1,49 @@
-import os, re, time, shutil
-from typing import Optional, List
+# -*- coding: utf-8 -*-
+import os, re, time, shutil, glob
+from typing import Optional, List, Tuple
 from pathlib import Path
 
-import pandas as pd  # 仅占位；当前逻辑未直接用到
+import pandas as pd  # 仅占位
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
 # ============ 引入你的两个工具类 ============
 from Utils.graph_mail_attachment_tool import GraphMailAttachmentTool
 from Utils.sql_agent_tool import SqlAgentTool
+# ===========================================
 
-# ============
-# 配置区（按需修改）
-# ============
+# ----------------- 全局开关：输入源 -----------------
+# "email" -> 从邮箱下载到 LOCAL_TMP_DIR，再用最新文件
+# "folder" -> 直接在 FOLDER_SOURCE_DIR 中按匹配规则挑最新文件
+INPUT_MODE: str = os.getenv("MRP_INPUT_MODE", "email").lower()  # email | folder
+# ---------------------------------------------------
 
-# Graph 应用信息
+# ============ 配置区（按需修改） ============
+
+# Graph 应用信息（仅在 INPUT_MODE='email' 有效）
 TENANT_ID = "5c2be51b-4109-461d-a0e7-521be6237ce2"
 CLIENT_ID = "09004044-1c60-48e5-b1eb-bb42b3892006"
 
-# 邮件附件匹配规则
-ATTACHMENT_NAME_EQUALS: Optional[str] = None
-ATTACHMENT_NAME_CONTAINS = "ZMRP_WATERFALL_Run"
-ATTACHMENT_EXT = ".xlsx"
+# 附件/文件匹配规则（两种模式共用）
+ATTACHMENT_NAME_EQUALS: Optional[str] = None           # 精确名优先
+ATTACHMENT_NAME_CONTAINS = "ZMRP_WATERFALL_M"          # 其次用“包含”匹配
+ATTACHMENT_EXT = ".xlsx"                               # 扩展名过滤
 
-# 下载行为
+# 下载行为（仅在 INPUT_MODE='email' 有效）
 NEED_COUNT = 1
 DAYS_BACK  = 90
 PAGE_SIZE  = 50
 MAX_SCAN   = 800
 MAIL_FOLDER = "inbox"   # 不限制可设为 None
 
-# 本地目录
+# 本地目录（两种模式都会用到）
 LOCAL_TMP_DIR   = r"\\mp1do4ce0373ndz\C\WeeklyRawFile\Download_From_Eamil"
 LOCAL_CLEAN_DIR = r"\\mp1do4ce0373ndz\C\WeeklyRawFile\Download_From_Eamil\Processed"
+
+# 当 INPUT_MODE='folder' 时，从这个目录直接找原始文件
+FOLDER_SOURCE_DIR = LOCAL_TMP_DIR  # 也可单独设一个目录
+# 可用 glob 模式做进一步过滤（为空则用 equals/contains/ext 组合规则）
+FOLDER_GLOB_PATTERNS: List[str] = []  # 例如：["*ZMRP_WATERFALL*.xlsx"]
 
 # 共享盘目录与最终文件名
 SHARE_DEST_DIR = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall"
@@ -43,10 +54,10 @@ BLOCKING_NAME_KEYWORDS = ["W#1"]
 WAIT_TIMEOUT_SEC = 45 * 60
 WAIT_POLL_SEC    = 10
 
-# ---- SQL Job（留空给你填） ----
-SQL_SERVER   = "10.80.127.71,1433"   # 例： "tcp:10.80.127.71,1433"
-SQL_JOB_NAME = "Lumileds BI - SC RawMaterialEOHProjection"   # 例： "Lumileds BI - SC MRP Waterfall"（建议精确名）
-ARCHIVE_DIR = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall"
+# ---- SQL Job ----
+SQL_SERVER   = "10.80.127.71,1433"
+SQL_JOB_NAME = "Lumileds BI - SC RawMaterialEOHProjection"
+ARCHIVE_DIR  = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall\Archive"
 
 
 # ============ 小工具 ============
@@ -57,6 +68,50 @@ def ensure_dir(p: str):
 def newest_file(paths: List[str]) -> Optional[str]:
     files = [p for p in paths if p and os.path.isfile(p)]
     return max(files, key=lambda p: os.path.getmtime(p)) if files else None
+
+def list_matching_files_in_dir(
+    folder: str,
+    equals: Optional[str],
+    contains: Optional[str],
+    ext: Optional[str],
+    extra_globs: Optional[List[str]] = None
+) -> List[str]:
+    """
+    在 folder 中返回满足条件的文件列表（不递归）。
+    优先顺序只是匹配选择逻辑，不做排序；排序交给 newest_file。
+    """
+    try:
+        names = [n for n in os.listdir(folder) if os.path.isfile(os.path.join(folder, n))]
+    except FileNotFoundError:
+        return []
+
+    candidates: List[str] = []
+
+    # 如果配置了额外 glob，则直接按 glob 拿（允许多模式）
+    if extra_globs:
+        for pat in extra_globs:
+            candidates.extend(glob.glob(os.path.join(folder, pat)))
+        # 去重
+        candidates = list({os.path.abspath(p) for p in candidates if os.path.isfile(p)})
+        return candidates
+
+    # 否则用 equals / contains / ext 的规则
+    # 1) equals（精确名）
+    if equals:
+        for n in names:
+            if n == equals:
+                candidates.append(os.path.join(folder, n))
+        if candidates:
+            return candidates
+
+    # 2) contains + ext
+    for n in names:
+        ok_contains = (contains.lower() in n.lower()) if contains else True
+        ok_ext = n.lower().endswith(ext.lower()) if ext else True
+        if ok_contains and ok_ext:
+            candidates.append(os.path.join(folder, n))
+
+    return candidates
 
 def wait_folder_clear(folder: str, keywords: List[str], timeout_sec: int, poll_sec: int) -> bool:
     print(f"⏳ 等待共享盘清空占位文件（关键词：{keywords}）...")
@@ -76,16 +131,9 @@ def wait_folder_clear(folder: str, keywords: List[str], timeout_sec: int, poll_s
         time.sleep(poll_sec)
 
 def _normalize_material_text(s: str) -> str:
-    """
-    物料号文本规范化：
-      - 去首尾空格
-      - '12345.0' -> '12345'
-      - 仅当是数字且以 '00000' 开头时，移除**前 5 个 0**
-    """
     s = "" if s is None else str(s).strip()
     if not s:
         return ""
-    import re
     if re.fullmatch(r"\d+(\.0+)?", s):
         try:
             s = str(int(float(s)))
@@ -96,11 +144,6 @@ def _normalize_material_text(s: str) -> str:
     return s
 
 def clean_workbook(in_xlsx: str, out_xlsx: str):
-    """
-    用 openpyxl 清洗：
-      - A列：文本格式，按 _normalize_material_text 规范化
-      - E列：尽量转为数值（其余保留）
-    """
     print(f"🧽 清洗（保物料号）：{in_xlsx}")
     wb = load_workbook(in_xlsx, data_only=True)
     ws = wb.active
@@ -132,23 +175,19 @@ def clean_workbook(in_xlsx: str, out_xlsx: str):
     print(f"✔ 清洗完成 -> {out_xlsx}")
 
 def copy_to_share(src_file: str, dest_folder: str) -> str:
-    """
-    另存为固定文件名并复制到共享盘（直接覆盖，不做备份）。
-    """
     dest_path = os.path.join(dest_folder, DEST_FILENAME)
-    # 确保目录存在（一般共享盘已存在，这里稳妥一下）
     Path(dest_folder).mkdir(parents=True, exist_ok=True)
-
-    # 直接覆盖（shutil.copy2 遇到同名文件会覆盖）
     shutil.copy2(src_file, dest_path)
     print(f"📤 已复制并覆盖共享盘：{dest_path}")
     return dest_path
 
 
-# ============ 主流程：下载 + 清洗 + 复制 + 触发Job ============
+# ============ 输入源解耦 ============
 
-def main():
-    # Step 1：下载（调用工具类）
+def fetch_from_email() -> str:
+    """
+    从邮箱下载到 LOCAL_TMP_DIR，返回最新文件路径。
+    """
     print("==== Step 1: 从邮箱下载月度文件 ====")
     ensure_dir(LOCAL_TMP_DIR)
     graph_tool = GraphMailAttachmentTool(
@@ -166,10 +205,73 @@ def main():
         save_dir=LOCAL_TMP_DIR,
         mail_folder=MAIL_FOLDER,
     )
-    latest_raw = newest_file([str(p) for p in saved_paths])
-    if not latest_raw:
+
+    # saved_paths 已经是下载得到的文件；兜底再在目录中按规则找一遍
+    candidates = []
+    if saved_paths:
+        candidates.extend([str(p) for p in saved_paths if p and os.path.isfile(str(p))])
+
+    if not candidates:
+        candidates = list_matching_files_in_dir(
+            folder=LOCAL_TMP_DIR,
+            equals=ATTACHMENT_NAME_EQUALS,
+            contains=ATTACHMENT_NAME_CONTAINS,
+            ext=ATTACHMENT_EXT,
+            extra_globs=None
+        )
+
+    latest = newest_file(candidates)
+    if not latest:
         raise RuntimeError("未获取到任何附件文件。")
-    print(f"➡ 最新原始文件：{latest_raw}")
+    print(f"➡ 最新原始文件（邮箱）：{latest}")
+    return latest
+
+def fetch_from_folder() -> str:
+    """
+    直接在 FOLDER_SOURCE_DIR 中找匹配的最新文件，返回路径。
+    """
+    print("==== Step 1: 从文件夹选择最新文件 ====")
+    ensure_dir(FOLDER_SOURCE_DIR)
+    candidates = list_matching_files_in_dir(
+        folder=FOLDER_SOURCE_DIR,
+        equals=ATTACHMENT_NAME_EQUALS,
+        contains=ATTACHMENT_NAME_CONTAINS,
+        ext=ATTACHMENT_EXT,
+        extra_globs=FOLDER_GLOB_PATTERNS or None
+    )
+    latest = newest_file(candidates)
+    if not latest:
+        hint = f"目录为空或无匹配：{FOLDER_SOURCE_DIR}"
+        if FOLDER_GLOB_PATTERNS:
+            hint += f"；glob={FOLDER_GLOB_PATTERNS}"
+        else:
+            hint += f"；规则=equals:{ATTACHMENT_NAME_EQUALS} / contains:{ATTACHMENT_NAME_CONTAINS} / ext:{ATTACHMENT_EXT}"
+        raise RuntimeError(hint)
+    print(f"➡ 最新原始文件（文件夹）：{latest}")
+    return latest
+
+def get_latest_input() -> str:
+    """
+    根据 INPUT_MODE 选择输入源，并返回“原始文件路径”。
+    """
+    mode = INPUT_MODE
+    if mode not in ("email", "folder"):
+        print(f"⚠ 未知 INPUT_MODE={mode}，回退到 'folder'")
+        mode = "folder"
+
+    if mode == "email":
+        return fetch_from_email()
+    else:
+        return fetch_from_folder()
+
+
+# ============ 主流程：清洗 + 复制 + 触发Job ============
+
+def main():
+    print(f"==== MRP Waterfall（输入源：{INPUT_MODE}）====")
+
+    # Step 1：拿到“原始文件”
+    latest_raw = get_latest_input()
 
     # Step 2 & 3：清洗
     print("\n==== Step 2 & 3: 另存并清洗 ====")
@@ -189,16 +291,16 @@ def main():
         return
     dest = copy_to_share(cleaned_tmp, SHARE_DEST_DIR)
 
-    # Step 5：触发 SQL Job（用工具类；会哔哔声并打开 Archive 文件夹）
+    # Step 5：触发 SQL Job
     print("\n==== Step 5: 触发 SQL Job ====")
     if SQL_SERVER and SQL_JOB_NAME and ARCHIVE_DIR:
         sql_tool = SqlAgentTool(server=SQL_SERVER)
         result = sql_tool.run_job(
             job_name=SQL_JOB_NAME,
-            archive_dir=ARCHIVE_DIR,   # 成功后会打开此文件夹
+            archive_dir=ARCHIVE_DIR,
             timeout=1800,
             poll_interval=3,
-            fuzzy=False,               # 若之后有读 sysjobs 权限，可设 True
+            fuzzy=False,
         )
         print("[JOB RESULT]", result)
     else:
