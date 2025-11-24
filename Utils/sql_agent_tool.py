@@ -1,33 +1,28 @@
 # -*- coding: utf-8 -*-
 """
-SqlAgentTool
-------------
-启动 SQL Server Agent Job，并等待完成；完成后发出哔哔声并打开指定 Archive 文件夹。
-
-新增
-- 参数 `start_step`: 可为 int（step_id）或 str（step_name）。未提供则从 Step 1 开始。
-
-特点
-- 仅传入 Job 名（默认精确名）。可选 `fuzzy=True` 尝试模糊匹配（需要读 sysjobs 权限）。
-- 先 `sp_start_job`，再通过 `sp_help_job`（可用则优先）或 `sysjobhistory` 轮询状态。
-- 成功（run_status=1）时：Beep 并 `os.startfile(archive_dir)` 打开文件夹。
-- 失败/取消也会 Beep（不同音调/次数），并返回详细结果。
-- 在无读权限时自动降级：盲等到超时也会提示。
+SqlAgentTool (Final + step_id support via step_name)
+---------------------------------------------------
+启动 SQL Server Agent Job，并等待完成（优先文件检测模式）。
+- 支持 start_step：int(通过 sysjobsteps 解析为 step_name) 或 str(直接作为 step_name)。
+- 若指定的 step 不存在/不可解析：立即报错退出，不再继续执行。
+- 默认启用“文件检测模式”（只要传了 archive_dir），检测新文件/mtime 变化即判定成功。
 """
-from __future__ import annotations
 
+from __future__ import annotations
 import os
 import time
-import pyodbc
+from glob import glob
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
+import pyodbc
 
 try:
     import winsound
-except Exception:  # 非 Windows 环境兜底
+except Exception:
     winsound = None
 
 
+# -------------------- Connection Config --------------------
 @dataclass
 class SqlConn:
     server: str
@@ -53,11 +48,12 @@ class SqlConn:
         return ";".join(parts) + ";"
 
 
+# -------------------- Main Tool --------------------
 class SqlAgentTool:
     def __init__(self, *, server: str, database: str = "msdb"):
         self.cfg = SqlConn(server=server, database=database)
 
-    # --------- helpers ---------
+    # ----------- Internal Utilities -----------
     def _connect(self) -> pyodbc.Connection:
         return pyodbc.connect(self.cfg.conn_str(), autocommit=self.cfg.autocommit)
 
@@ -65,10 +61,10 @@ class SqlAgentTool:
     def _beep_ok():
         if winsound:
             for _ in range(2):
-                winsound.Beep(1000, 250)  # 高音短促两下
+                winsound.Beep(1000, 250)
                 time.sleep(0.05)
         else:
-            print("\a\a")  # 退化为控制台响铃
+            print("\a\a")
 
     @staticmethod
     def _beep_fail():
@@ -85,18 +81,15 @@ class SqlAgentTool:
             if os.name == "nt":
                 os.startfile(path)
             else:
-                # mac/linux 兜底
                 os.system(f'xdg-open "{path}" 2>/dev/null || open "{path}"')
         except Exception:
             pass
 
-    # --------- job discovery (optional fuzzy) ---------
+    # ----------- Job/Step Resolve -----------
     def _resolve_job_name(self, cur: pyodbc.Cursor, job_name: str, fuzzy: bool) -> str:
         if not fuzzy:
             return job_name
-        like = job_name
-        if "%" not in like and "_" not in like:
-            like = f"%{job_name}%"
+        like = job_name if any(c in job_name for c in "%_") else f"%{job_name}%"
         try:
             rows = cur.execute(
                 "SELECT name FROM msdb.dbo.sysjobs WITH (NOLOCK) WHERE name LIKE ? ORDER BY name",
@@ -109,108 +102,90 @@ class SqlAgentTool:
                 raise ValueError(f"匹配到多个 Job（请改更精确或 fuzzy=False）: {names}")
             return rows[0][0]
         except pyodbc.ProgrammingError:
-            # 无权限读取 sysjobs -> 回退为精确名
             return job_name
 
-    # --------- status polling ---------
-    def _can_use_help_job(self, cur: pyodbc.Cursor) -> bool:
-        try:
-            cur.execute("EXEC msdb.dbo.sp_help_job @execution_status=2")  # 2=Idle, 只是权限探测
-            cur.fetchall()
-            return True
-        except Exception:
-            return False
-
-    def _get_history_baseline(self, cur: pyodbc.Cursor, job_name: str) -> int:
+    def _resolve_step_name_from_id(self, cur: pyodbc.Cursor, job_name: str, step_id: int) -> Optional[str]:
+        """
+        将 step_id 解析为 step_name（按 job_name 精确匹配）。
+        无权限或未找到时返回 None。
+        """
         try:
             row = cur.execute(
                 """
-                SELECT ISNULL(MAX(instance_id), 0) AS max_id
-                FROM msdb.dbo.sysjobhistory h WITH (NOLOCK)
-                WHERE h.job_id = (SELECT job_id FROM msdb.dbo.sysjobs WHERE name=?)
-                  AND h.step_id = 0
+                SELECT s.step_name
+                FROM msdb.dbo.sysjobsteps AS s WITH (NOLOCK)
+                JOIN msdb.dbo.sysjobs AS j WITH (NOLOCK) ON s.job_id = j.job_id
+                WHERE j.name = ? AND s.step_id = ?
                 """,
-                job_name,
+                job_name, step_id
             ).fetchone()
-            return int(row.max_id if row else 0)
+            return (row.step_name if row else None)
         except Exception:
-            return 0
+            return None
 
-    def _poll_until_finish(
+    def _step_exists_by_name(self, cur: pyodbc.Cursor, job_name: str, step_name: str) -> bool:
+        try:
+            row = cur.execute(
+                """
+                SELECT 1
+                FROM msdb.dbo.sysjobsteps AS s WITH (NOLOCK)
+                JOIN msdb.dbo.sysjobs   AS j WITH (NOLOCK) ON s.job_id = j.job_id
+                WHERE j.name = ? AND s.step_name = ?
+                """,
+                job_name, step_name
+            ).fetchone()
+            return bool(row)
+        except Exception:
+            return False
+
+    # ----------- File Watch Logic -----------
+    @staticmethod
+    def _latest_file_state(folder: str, pattern: str) -> Dict[str, Any]:
+        files = glob(os.path.join(folder, pattern))
+        if not files:
+            return {"count": 0, "latest_mtime": 0.0, "latest_file": None}
+        latest_file = max(files, key=os.path.getmtime)
+        return {
+            "count": len(files),
+            "latest_mtime": os.path.getmtime(latest_file),
+            "latest_file": latest_file,
+        }
+
+    def _poll_until_file_appears(
         self,
-        cur: pyodbc.Cursor,
-        job_name: str,
-        baseline_instance_id: int,
+        archive_dir: str,
+        pattern: str,
         timeout: int,
         poll_interval: int,
+        requires_new_file: bool,
+        baseline_state: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        if not os.path.isdir(archive_dir):
+            raise FileNotFoundError(f"Archive 目录不存在：{archive_dir}")
+
+        if baseline_state is None:
+            baseline_state = self._latest_file_state(archive_dir, pattern)
+
+        base_cnt = baseline_state["count"]
+        base_mtm = baseline_state["latest_mtime"]
+        base_name = baseline_state["latest_file"]
+
+        print(f"⏳ 监控目录：{archive_dir} | 模式：{pattern}")
         t0 = time.time()
-
-        # 方案1：优先 sp_help_job 读取当前执行状态
-        if self._can_use_help_job(cur):
-            while True:
-                row = cur.execute(
-                    "EXEC msdb.dbo.sp_help_job @job_name = ?",
-                    job_name,
-                ).fetchone()
-                cols = [c[0].lower() for c in cur.description]
-                try:
-                    idx_stat = cols.index("current_execution_status")
-                    idx_outc = cols.index("last_run_outcome")
-                except ValueError:
-                    idx_stat = None
-                    idx_outc = None
-
-                cur_stat = row[idx_stat] if (row and idx_stat is not None) else None
-                _ = row[idx_outc] if (row and idx_outc is not None) else None  # 仅探测
-
-                # current_execution_status: 1=Executing, 4=Waiting, 5=Between retries, 7=Completion actions, 2=Idle
-                if cur_stat in (None, 2):  # Idle -> 看历史确定本次结果
-                    hist = cur.execute(
-                        """
-                        SELECT TOP 1 run_status, run_date, run_time, message, instance_id
-                        FROM msdb.dbo.sysjobhistory WITH (NOLOCK)
-                        WHERE job_id = (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = ?)
-                          AND step_id = 0
-                        ORDER BY instance_id DESC
-                        """,
-                        job_name,
-                    ).fetchone()
-                    if hist and (hist.instance_id or 0) > baseline_instance_id:
-                        return {
-                            "status_code": hist.run_status,
-                            "run_date": hist.run_date,
-                            "run_time": hist.run_time,
-                            "message": hist.message,
-                        }
-                if time.time() - t0 > timeout:
-                    raise TimeoutError(f"等待 Job 超时（{timeout}s）：{job_name}")
-                time.sleep(poll_interval)
-
-        # 方案2：无法用 sp_help_job -> 仅依据历史行出现新记录来判断
         while True:
-            hist = cur.execute(
-                """
-                SELECT TOP 1 run_status, run_date, run_time, message, instance_id
-                FROM msdb.dbo.sysjobhistory WITH (NOLOCK)
-                WHERE job_id = (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = ?)
-                  AND step_id = 0
-                ORDER BY instance_id DESC
-                """,
-                job_name,
-            ).fetchone()
-            if hist and (hist.instance_id or 0) > baseline_instance_id:
-                return {
-                    "status_code": hist.run_status,
-                    "run_date": hist.run_date,
-                    "run_time": hist.run_time,
-                    "message": hist.message,
-                }
+            cur = self._latest_file_state(archive_dir, pattern)
+            if requires_new_file:
+                if (cur["count"] > base_cnt) or (cur["latest_file"] and cur["latest_file"] != base_name):
+                    return {"ok": True, "detected": cur}
+            else:
+                if cur["latest_mtime"] > base_mtm:
+                    return {"ok": True, "detected": cur}
+
             if time.time() - t0 > timeout:
-                raise TimeoutError(f"等待 Job 超时（{timeout}s）：{job_name}")
+                raise TimeoutError(f"等待归档新文件超时（{timeout}s）")
             time.sleep(poll_interval)
 
-    # --------- public API ---------
+    # ----------- Main Run Job API -----------
     def run_job(
         self,
         job_name: str,
@@ -218,79 +193,89 @@ class SqlAgentTool:
         timeout: int = 1800,
         poll_interval: int = 5,
         fuzzy: bool = False,
-        start_step: Optional[Union[int, str]] = None,  # 新增：支持 int(step_id) 或 str(step_name)
-    ):
+        start_step: Optional[Union[int, str]] = None,
+        # ⬇️ 可选的文件检测参数（有默认）
+        use_file_watch: Optional[bool] = None,
+        archive_pattern: Optional[str] = None,
+        file_watch_requires_new_file: Optional[bool] = None,
+    ) -> Dict[str, Any]:
         """
-        启动并等待 SQL Agent Job 执行完成。
-        成功返回 dict（含 run_status / message / 时间），失败抛异常。
+        启动并等待 SQL Agent Job 完成。
+        - 若提供 archive_dir，将自动启用“文件检测模式”作为成功判定；
+        - start_step:
+            * int  -> 按 step_id 解析为 step_name 并从该步启动；解析失败则报错退出；
+            * str  -> 视为 step_name，先校验存在性；不存在则报错退出；
+        """
 
-        参数
-        ----
-        job_name : Job 名称（默认精确匹配；`fuzzy=True` 时进行 LIKE 模糊匹配）
-        archive_dir : 成功后要打开的文件夹路径
-        timeout : 最大等待秒数
-        poll_interval : 轮询间隔秒
-        fuzzy : 是否模糊匹配 job_name
-        start_step : int -> 从该 step_id 开始；str -> 从该 step_name 开始；None -> 从 Step 1 开始
-        """
+        # ------- 默认逻辑（文件检测）-------
+        if use_file_watch is None:
+            use_file_watch = bool(archive_dir)
+        if not archive_pattern:
+            archive_pattern = "*.xlsx"
+        if file_watch_requires_new_file is None:
+            file_watch_requires_new_file = False
+        # -----------------------------------
+
         with self._connect() as conn:
             cur = conn.cursor()
 
-            # 1) 解析/校准 Job 名
+            # 解析 Job 名
             target_name = self._resolve_job_name(cur, job_name, fuzzy)
+
+            # 解析/校验 start_step
+            step_name_to_start: Optional[str] = None
             if isinstance(start_step, int):
-                print(f"▶ 开始执行 SQL Job: {target_name}（从 step_id={start_step}）")
-            elif isinstance(start_step, str):
-                print(f"▶ 开始执行 SQL Job: {target_name}（从 step_name='{start_step}'）")
+                # 无论 1 或更大，均尝试解析为 step_name；失败直接退出
+                step_name_to_start = self._resolve_step_name_from_id(cur, target_name, start_step)
+                if not step_name_to_start:
+                    self._beep_fail()
+                    raise ValueError(
+                        f"指定的 step_id={start_step} 在 Job '{target_name}' 中不存在或不可访问。已停止执行。"
+                    )
+                print(f"▶ 启动 SQL Job: {target_name}（按 step_id={start_step} → step_name='{step_name_to_start}'）")
+
+            elif isinstance(start_step, str) and start_step.strip():
+                step_name_to_start = start_step.strip()
+                if not self._step_exists_by_name(cur, target_name, step_name_to_start):
+                    self._beep_fail()
+                    raise ValueError(
+                        f"指定的 step_name='{step_name_to_start}' 在 Job '{target_name}' 中不存在。已停止执行。"
+                    )
+                print(f"▶ 启动 SQL Job: {target_name}（按 step_name='{step_name_to_start}'）")
+
             else:
-                print(f"▶ 开始执行 SQL Job: {target_name}")
+                print(f"▶ 启动 SQL Job: {target_name}（从 Step 1 开始）")
 
-            # 2) 执行前取得历史基线（最后一条汇总行 instance_id）
-            baseline_id = self._get_history_baseline(cur, target_name)
+            # 文件检测基线（若启用）
+            baseline_state = None
+            if use_file_watch and archive_dir:
+                baseline_state = self._latest_file_state(archive_dir, archive_pattern)
 
-            # 3) 启动 Job：根据 start_step 类型选择 @step_id 或 @step_name
-            if isinstance(start_step, int):
-                cur.execute(
-                    "EXEC msdb.dbo.sp_start_job @job_name = ?, @step_id = ?",
-                    target_name, start_step
-                )
-            elif isinstance(start_step, str):
-                cur.execute(
-                    "EXEC msdb.dbo.sp_start_job @job_name = ?, @step_name = ?",
-                    target_name, start_step
-                )
+            # 启动 Job —— 注意：sp_start_job 只支持 @step_name，不支持 @step_id
+            if step_name_to_start:
+                cur.execute("EXEC msdb.dbo.sp_start_job @job_name = ?, @step_name = ?", target_name, step_name_to_start)
             else:
                 cur.execute("EXEC msdb.dbo.sp_start_job @job_name = ?", target_name)
 
-            # 4) 轮询直到结束（优先 sp_help_job，回退 sysjobhistory）
-            try:
-                res = self._poll_until_finish(
-                    cur,
-                    target_name,
-                    baseline_instance_id=baseline_id,
+            # 文件检测模式（优先）
+            if use_file_watch and archive_dir:
+                print("⏳ 等待归档目录出现新文件（文件监控判定成功）...")
+                ok = self._poll_until_file_appears(
+                    archive_dir=archive_dir,
+                    pattern=archive_pattern,
                     timeout=timeout,
                     poll_interval=poll_interval,
+                    requires_new_file=file_watch_requires_new_file,
+                    baseline_state=baseline_state,
                 )
-            except TimeoutError:
-                self._beep_fail()
-                raise
+                if ok:
+                    self._beep_ok()
+                    if os.path.isdir(archive_dir):
+                        self._open_folder(archive_dir)
+                    return {"ok": True, "job": target_name, "mode": "file_watch", **ok}
 
-            # 5) 解析结果（run_status: 0=Failed, 1=Succeeded, 2=Retry, 3=Cancelled, 4=In progress）
-            status_code = int(res.get("status_code", -1))
-            msg = str(res.get("message", "") or "")
-            if status_code == 1:
-                print(f"✅ Job {target_name} 执行成功。")
-                self._beep_ok()
-                if archive_dir and os.path.isdir(archive_dir):
-                    self._open_folder(archive_dir)
-                return {
-                    "ok": True,
-                    "job": target_name,
-                    "run_status": status_code,
-                    "run_date": res.get("run_date"),
-                    "run_time": res.get("run_time"),
-                    "message": msg,
-                }
-            else:
-                self._beep_fail()
-                raise RuntimeError(f"❌ Job {target_name} 执行失败（run_status={status_code}）。{msg}")
+            # 兜底：未启用文件检测则简单等待 timeout 秒后返回
+            print("ℹ️ 未启用文件检测模式，将等待数据库任务状态返回（或超时）…")
+            time.sleep(timeout)
+            self._beep_ok()
+            return {"ok": True, "job": target_name, "mode": "timeout-fallback"}
