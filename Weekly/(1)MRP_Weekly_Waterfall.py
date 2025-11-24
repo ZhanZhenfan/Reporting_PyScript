@@ -10,6 +10,9 @@ from Utils.sql_agent_tool import SqlAgentTool
 SRC_DIR = r"\\mp1do4ce0373ndz\C\WeeklyRawFile\Download_From_Eamil"   # 你截图里的目录名我按“Eamil”写的
 SHARE_DIR = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall"
 
+# 要在作业执行完后打开的 Excel 文件
+EXCEL_MACRO_PATH = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Temp Report\03 - MY0X MRP_NEW_WATERFALL_Master - button.xlsm"
+
 # 1) 先下载邮件附件到本地目录
 down = GraphMailAttachmentTool(
     tenant_id="5c2be51b-4109-461d-a0e7-521be6237ce2",
@@ -25,17 +28,16 @@ downloaded_paths = down.download_latest_attachments(
 )
 
 print("[INFO] 下载到：", [p.name for p in downloaded_paths])
-# 2) 后续你的合并逻辑保持不变（继续从 SRC_DIR 里挑两个最新文件）
-
-# ------------ 可按需调整的路径 ------------
 
 
 # ------------ 工具函数 ------------
+
 def most_recent_monday(today=None):
     """返回本周一（如果今天是周一就取今天）的日期对象"""
     today = today or datetime.today()
     # Python: Monday=0 ... Sunday=6
-    return (today - timedelta(days=today.weekday()))
+    return today - timedelta(days=today.weekday())
+
 
 def pick_big_small(files):
     """按文件大小挑出(大, 小)两个文件"""
@@ -43,7 +45,9 @@ def pick_big_small(files):
     sizes.sort(key=lambda x: x[1], reverse=True)
     return sizes[0][0], sizes[1][0]
 
+
 # ------------ 主逻辑 ------------
+
 def main():
     src = Path(SRC_DIR)
     if not src.is_dir():
@@ -55,6 +59,7 @@ def main():
     if len(candidates) < 2:
         print(f"[ERROR] 没找到两份文件，当前匹配到 {len(candidates)}: {[f.name for f in candidates]}")
         sys.exit(1)
+
     # 只取最新的两份（按修改时间降序）
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     files_to_use = candidates[:2]
@@ -98,8 +103,8 @@ def main():
     shutil.copy2(out_path, share_target)
     print(f"[OK] 已复制到共享盘: {share_target}")
 
+    # 4) 触发 SQL Agent Job
     tool = SqlAgentTool(server="tcp:10.80.127.71,1433")
-
     result = tool.run_job(
         job_name="Lumileds BI - SC MRP Waterfall",  # 用完整精确名最稳妥
         archive_dir=r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall\Archive",
@@ -108,6 +113,17 @@ def main():
         fuzzy=False,  # 若你 later 拿到读 sysjobs 的权限，可改 True
     )
     print(result)
+
+    # 5) SQL 作业完成后，打开 Excel 宏文件
+    try:
+        if os.path.exists(EXCEL_MACRO_PATH):
+            print(f"[INFO] 正在打开 Excel 文件: {EXCEL_MACRO_PATH}")
+            os.startfile(EXCEL_MACRO_PATH)
+        else:
+            print(f"[WARN] 找不到要打开的 Excel 文件: {EXCEL_MACRO_PATH}")
+    except Exception as e:
+        print(f"[ERROR] 打开 Excel 文件失败: {e}")
+
 
 if __name__ == "__main__":
     main()
