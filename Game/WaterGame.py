@@ -179,7 +179,7 @@ class ABQuizApp:
         # Placeholder for PhotoImage to prevent garbage collection
         self.photo = None
 
-        # Set window properties
+        # 保持原来画布大小
         self.root.title(APP_TITLE_EN)
         self.root.geometry("900x600")
 
@@ -219,86 +219,147 @@ class ABQuizApp:
         """Construct all of the widgets used in the application."""
         # Top bar containing remaining count and control buttons
         top = tk.Frame(self.root)
-        top.pack(fill="x", pady=(10, 6))
+        top.pack(fill="x", pady=(8, 6))
 
-        self.lbl_left = tk.Label(top, text="", font=("Segoe UI", 12, "bold"))
-        self.lbl_left.pack(side="left", padx=10)
+        # 字体放大
+        self.lbl_left = tk.Label(top, text="", font=("Segoe UI", 18, "bold"))
+        self.lbl_left.pack(side="left", padx=12)
 
         btns = tk.Frame(top)
         btns.pack(side="right")
 
-        self.btn_lang = tk.Button(btns, text=self.t("lang_btn"), width=8, command=self.toggle_lang)
-        self.btn_lang.pack(side="right", padx=(8, 0))
-        self.btn_draw = tk.Button(btns, text=self.t("draw"), width=14, command=self.draw_question)
-        self.btn_draw.pack(side="right", padx=4)
+        # 按钮字体放大
+        self.btn_lang = tk.Button(
+            btns,
+            text=self.t("lang_btn"),
+            width=9,
+            font=("Segoe UI", 15, "bold"),
+            command=self.toggle_lang,
+        )
+        self.btn_lang.pack(side="right", padx=(10, 0))
+
+        self.btn_draw = tk.Button(
+            btns,
+            text=self.t("draw"),
+            width=16,
+            font=("Segoe UI", 15, "bold"),
+            command=self.draw_question,
+        )
+        self.btn_draw.pack(side="right", padx=5)
+
         # Next and restart simply draw a new question
-        self.btn_next = tk.Button(btns, text=self.t("next"), width=10, command=self.draw_question)
-        self.btn_next.pack(side="right", padx=4)
-        self.btn_restart = tk.Button(btns, text=self.t("restart"), width=10, command=self.draw_question)
-        self.btn_restart.pack(side="right", padx=4)
+        self.btn_next = tk.Button(
+            btns,
+            text=self.t("next"),
+            width=11,
+            font=("Segoe UI", 15, "bold"),
+            command=self.draw_question,
+        )
+        self.btn_next.pack(side="right", padx=5)
+
+        self.btn_restart = tk.Button(
+            btns,
+            text=self.t("restart"),
+            width=11,
+            font=("Segoe UI", 15, "bold"),
+            command=self.draw_question,
+        )
+        self.btn_restart.pack(side="right", padx=5)
 
         # Main card area
         self.card = tk.Frame(self.root, bd=2, relief="ridge", bg="#ffffff")
-        self.card.pack(expand=True, fill="both", padx=16, pady=10)
+        self.card.pack(expand=True, fill="both", padx=18, pady=10)
 
         # Question area (blue background)
         self.q_area = tk.Frame(self.card, bg="#d0e9f7")
-        self.q_area.pack(fill="x", padx=0, pady=(0, 0))
+        self.q_area.pack(fill="x", pady=(0, 4))
 
-        # Question label
+        # Question label —— 字体变大
         self.lbl_q = tk.Label(
             self.q_area,
             text=self.t("start_hint"),
-            wraplength=820,
+            wraplength=840,
             justify="left",
-            font=("Segoe UI", 17, "bold"),
+            font=("Segoe UI", 26, "bold"),
             bg="#d0e9f7",
         )
-        self.lbl_q.pack(padx=16, pady=(20, 12), anchor="w")
+        self.lbl_q.pack(padx=20, pady=(18, 10), anchor="w")
 
-        # Options within question area
+        # Options within question area —— 字体变大
         opts = tk.Frame(self.q_area, bg="#d0e9f7")
-        opts.pack(fill="x", padx=16, pady=(8, 12))
-        self.btn_A = tk.Button(opts, text="A", font=("Segoe UI", 14, "bold"), width=3, command=lambda: self.answer("A"))
-        self.btn_B = tk.Button(opts, text="B", font=("Segoe UI", 14, "bold"), width=3, command=lambda: self.answer("B"))
-        self.lbl_A = tk.Label(opts, text="", wraplength=740, justify="left", font=("Segoe UI", 14), bg="#d0e9f7")
-        self.lbl_B = tk.Label(opts, text="", wraplength=740, justify="left", font=("Segoe UI", 14), bg="#d0e9f7")
+        opts.pack(fill="x", padx=20, pady=(6, 14))
+
+        self.btn_A = tk.Button(
+            opts,
+            text="A",
+            font=("Segoe UI", 22, "bold"),
+            width=4,
+            command=lambda: self.answer("A"),
+        )
+        self.btn_B = tk.Button(
+            opts,
+            text="B",
+            font=("Segoe UI", 22, "bold"),
+            width=4,
+            command=lambda: self.answer("B"),
+        )
+        self.lbl_A = tk.Label(
+            opts,
+            text="",
+            wraplength=760,
+            justify="left",
+            font=("Segoe UI", 22),
+            bg="#d0e9f7",
+        )
+        self.lbl_B = tk.Label(
+            opts,
+            text="",
+            wraplength=760,
+            justify="left",
+            font=("Segoe UI", 22),
+            bg="#d0e9f7",
+        )
         # grid layout for options
         self.btn_A.grid(row=0, column=0, sticky="n")
-        self.lbl_A.grid(row=0, column=1, sticky="w", padx=(10, 0))
+        self.lbl_A.grid(row=0, column=1, sticky="w", padx=(12, 0))
         self.btn_B.grid(row=1, column=0, sticky="n", pady=(10, 0))
-        self.lbl_B.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(10, 0))
+        self.lbl_B.grid(row=1, column=1, sticky="w", padx=(12, 0), pady=(10, 0))
 
         # Display area for image and feedback/official answer
         self.display_area = tk.Frame(self.card, bg="#ffffff")
-        self.display_area.pack(expand=True, fill="both", padx=16, pady=(0, 10))
+        self.display_area.pack(expand=True, fill="both", padx=18, pady=(4, 12))
 
         # Image label (photo shown before answering)
         self.img_label = tk.Label(self.display_area, bg="#ffffff")
-        self.img_label.pack()
+        self.img_label.pack(pady=(6, 8))
 
-        # Feedback label for correct/incorrect text
-        self.lbl_feedback = tk.Label(self.display_area, text="", font=("Segoe UI", 13, "bold"), bg="#ffffff")
+        # Feedback label —— 字体变大
+        self.lbl_feedback = tk.Label(
+            self.display_area,
+            text="",
+            font=("Segoe UI", 22, "bold"),
+            bg="#ffffff",
+        )
 
-        # Recommended answer and explanation label
+        # Recommended answer and explanation label —— 字体再大一点
         self.lbl_official = tk.Label(
             self.display_area,
             text="",
-            wraplength=820,
+            wraplength=840,
             justify="left",
-            font=("Segoe UI", 15, "bold"),
+            font=("Segoe UI", 24, "bold"),
             fg="#1f4d1f",
             bg="#ffffff",
         )
 
-        # Tip below card
+        # Tip below card —— 字体稍微放大
         self.lbl_tip = tk.Label(
             self.root,
             text=self.t("leak_tip"),
-            font=("Segoe UI", 10),
+            font=("Segoe UI", 15),
             fg="#666",
         )
-        self.lbl_tip.pack(pady=(0, 8))
+        self.lbl_tip.pack(pady=(0, 10))
 
     def toggle_lang(self) -> None:
         """Switch between English and Chinese and refresh the UI labels."""
@@ -342,14 +403,16 @@ class ABQuizApp:
         except ValueError:
             idx = 0
         img_path = IMAGE_FILES[idx]
-        # Load and display the image
+        # Load and display the image —— 这里加放大
         try:
             pil_img = Image.open(img_path)
+            # 放大到 780×520（在 900×600 里比较充满）
+            pil_img = pil_img.resize((780, 520), Image.LANCZOS)
             self.photo = ImageTk.PhotoImage(pil_img)
             self.img_label.config(image=self.photo)
             # Ensure image label is visible
             if not self.img_label.winfo_ismapped():
-                self.img_label.pack()
+                self.img_label.pack(pady=(6, 8))
         except Exception as e:
             # If image fails to load, hide the label
             self.img_label.config(image="")
@@ -379,8 +442,8 @@ class ABQuizApp:
         official_text = f"{self.t('rec_answer')} ({correct}): {ans_text}\n{self.t('why')}: {exp}"
         self.lbl_official.config(text=official_text)
         # Show feedback and official answer labels
-        self.lbl_feedback.pack(anchor="w", padx=16, pady=(10, 4))
-        self.lbl_official.pack(anchor="w", padx=16, pady=(4, 10))
+        self.lbl_feedback.pack(anchor="w", padx=18, pady=(8, 3))
+        self.lbl_official.pack(anchor="w", padx=18, pady=(3, 10))
         # Lock until next question is drawn
         self.locked = True
 
