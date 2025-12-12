@@ -11,7 +11,7 @@ import openpyxl
 import pythoncom  # type: ignore
 from win32com.client import Dispatch, gencache  # type: ignore
 
-# ===== 配置 =====
+# ===== Configuration =====
 BASE_DIR = Path(r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\External\M1M2\Original Raw")
 BASE_NAMES = [
     "M2 ZSD VL06O",
@@ -21,9 +21,9 @@ BASE_NAMES = [
     "MB51-M2",
     "MM60",
 ]
-STRICT_MUST_FIND_ALL = True  # 任一基名未命中就报错退出
+STRICT_MUST_FIND_ALL = True  # Exit with error if any base name not found
 
-# ===== 日志工具 =====
+# ===== Logging Tools =====
 LOG_DIR = BASE_DIR / "_logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_PATH = LOG_DIR / f"repair_m1m2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -50,9 +50,9 @@ class Timer:
     def __exit__(self, exc_type, exc, tb):
         if self.t0 is not None:
             dt = time.time() - self.t0
-            log(f"⏱  {self.label} 用时 {dt:.2f}s")
+            log(f"⏱  {self.label} took {dt:.2f}s")
 
-# ===== 小工具 =====
+# ===== Utilities =====
 _WS_PATTERN = re.compile(r"^[\u0009\u000A\u000D\u0020\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000\uFEFF]*$")
 LEADING_ZERO = re.compile(r"^0\d+$")
 
@@ -136,20 +136,20 @@ def copy_preserve_types(src_ws, dst_ws, rows, cols):
         dst_col.ColumnWidth = src_col.ColumnWidth
         if c in milestones:
             pct = int(c/cols*100)
-            log(f"      · 列复制进度 {c}/{cols}（{pct}%）")
+            log(f"      · Column copy progress {c}/{cols} ({pct}%)")
 
 def rebuild_sheet_preserve_types(wb_com, ws_name, true_r, true_c):
     src = wb_com.Worksheets(ws_name)
     tmp = wb_com.Worksheets.Add(After=src)
     tmp.Name = f"{ws_name}__tmp"
     if true_r > 0 and true_c > 0:
-        with Timer(f"表 {ws_name} 复制 {true_r}x{true_c}"):
+        with Timer(f"Sheet {ws_name} copy {true_r}x{true_c}"):
             copy_preserve_types(src, tmp, true_r, true_c)
     src.Delete()
     tmp.Name = ws_name
 
 def compute_true_regions(file_path: Path) -> dict[str, tuple[int, int]]:
-    with Timer("openpyxl 计算真实区域"):
+    with Timer("openpyxl compute true regions"):
         wb_py = openpyxl.load_workbook(str(file_path), data_only=True, read_only=False)
         out = {}
         for ws in wb_py.worksheets:
@@ -162,7 +162,7 @@ def fuzzy_pick_latest(base_dir: Path, base_name: str) -> Path | None:
     pat = re.compile(rf"^{re.escape(base_name)}([\s_-].*)?\.xlsx$", re.IGNORECASE)
     candidates = []
     for p in base_dir.glob("*.xlsx"):
-        if p.name.startswith("~$"):  # 排除临时文件
+        if p.name.startswith("~$"):  # Exclude temporary files
             continue
         if pat.match(p.name):
             candidates.append(p)
@@ -177,41 +177,41 @@ def ensure_backup_dir(base_dir: Path) -> Path:
     return bk
 
 def repair_file_inplace(file_path: Path, app) -> None:
-    log(f"— 打开：{file_path.name}")
+    log(f"— Opening: {file_path.name}")
     sheets_true = compute_true_regions(file_path)
     wb = app.Workbooks.Open(str(file_path))
     names = [ws.Name for ws in wb.Worksheets]
-    log(f"— 重建：{file_path.name}（共 {len(names)} 张表）")
+    log(f"— Rebuilding: {file_path.name} (total {len(names)} sheets)")
     for name in names:
         r, c = sheets_true.get(name, (0, 0))
         if r == 0 and c == 0:
             if wb.Worksheets.Count > 1:
                 wb.Worksheets(name).Delete()
-                log(f"  [删除空表] {name}")
+                log(f"  [Delete empty sheet] {name}")
             else:
-                log(f"  [保留空表] {name}（仅剩一张表）")
+                log(f"  [Keep empty sheet] {name} (only one sheet left)")
             continue
-        log(f"  [开始] 表 {name} - TrueRange {r}x{c}")
+        log(f"  [Start] Sheet {name} - TrueRange {r}x{c}")
         rebuild_sheet_preserve_types(wb, name, r, c)
-        log(f"  [完成] 表 {name}")
+        log(f"  [Complete] Sheet {name}")
     wb.Close(SaveChanges=True)
-    log(f"— 保存完成：{file_path.name}")
+    log(f"— Save completed: {file_path.name}")
 
 def verify_lastcell(file_path: Path, app) -> None:
     wb = app.Workbooks.Open(str(file_path))
-    log("— 验证 Ctrl+End：")
+    log("— Verifying Ctrl+End:")
     for ws in wb.Worksheets:
         lr, lc = safe_lastcell(ws)
         log(f"    [{ws.Name}] LastCell({lr},{lc})")
     wb.Close(SaveChanges=False)
 
-# ===== 主流程 =====
+# ===== Main Process =====
 def main():
     if not BASE_DIR.exists():
-        log(f"目录不存在：{BASE_DIR}")
+        log(f"Directory does not exist: {BASE_DIR}")
         sys.exit(1)
 
-    log("阶段 1/4：扫描匹配最新文件")
+    log("Phase 1/4: Scanning for latest matching files")
     selected: list[tuple[str, Path]] = []
     missing: list[str] = []
 
@@ -222,29 +222,29 @@ def main():
             log(f"  ✓ {base} -> {p.name}  [modified {t}]")
             selected.append((base, p))
         else:
-            log(f"  ✗ 未找到：{base}*.xlsx")
+            log(f"  ✗ Not found: {base}*.xlsx")
             missing.append(base)
 
     if STRICT_MUST_FIND_ALL and missing:
-        log(f"❌ 未找到以下文件（共 {len(missing)}/{len(BASE_NAMES)}）：")
+        log(f"❌ The following files were not found (total {len(missing)}/{len(BASE_NAMES)}):")
         for b in missing:
             log(f"   - {b}*.xlsx")
-        log("程序终止。请确认文件已投放到目录后再运行。")
+        log("Program terminated. Please confirm files are placed in the directory before running again.")
         sys.exit(2)
 
     if not selected:
-        log("未找到任何目标文件，结束。")
+        log("No target files found, exiting.")
         sys.exit(2)
 
-    log("阶段 2/4：统一备份")
+    log("Phase 2/4: Creating unified backup")
     backup_dir = ensure_backup_dir(BASE_DIR)
-    log(f"  备份目录：{backup_dir}")
+    log(f"  Backup directory: {backup_dir}")
     for _, p in selected:
-        with Timer(f"备份 {p.name}"):
+        with Timer(f"Backup {p.name}"):
             shutil.copy2(p, backup_dir / p.name)
-        log(f"  已备份：{p.name}")
+        log(f"  Backed up: {p.name}")
 
-    log("阶段 3/4：Excel COM 重建（保类型）")
+    log("Phase 3/4: Excel COM rebuild (preserving types)")
     pythoncom.CoInitialize()
     app = None
     try:
@@ -253,12 +253,12 @@ def main():
         app.Visible = False
         app.DisplayAlerts = False
         for idx, (_, p) in enumerate(selected, 1):
-            log(f"\n=== 文件 {idx}/{len(selected)}：{p.name} ===")
-            with Timer(f"{p.name} 重建总耗时"):
+            log(f"\n=== File {idx}/{len(selected)}: {p.name} ===")
+            with Timer(f"{p.name} total rebuild time"):
                 try:
                     repair_file_inplace(p, app)
                 except Exception as e:
-                    log(f"!!! 处理失败：{p.name} | {e}")
+                    log(f"!!! Processing failed: {p.name} | {e}")
                     log(traceback.format_exc())
     finally:
         try:
@@ -267,7 +267,7 @@ def main():
             pass
         pythoncom.CoUninitialize()
 
-    log("\n阶段 4/4：结果验证")
+    log("\nPhase 4/4: Result verification")
     pythoncom.CoInitialize()
     app2 = None
     try:
@@ -275,7 +275,7 @@ def main():
         app2.Visible = False
         app2.DisplayAlerts = False
         for _, p in selected:
-            with Timer(f"{p.name} 验证"):
+            with Timer(f"{p.name} verification"):
                 verify_lastcell(p, app2)
     finally:
         try:
@@ -284,7 +284,7 @@ def main():
             pass
         pythoncom.CoUninitialize()
 
-    log("\n✅ 全部完成。详细日志见：{}".format(LOG_PATH))
+    log("\n✅ All tasks completed. Detailed log available at: {}".format(LOG_PATH))
 
 if __name__ == "__main__":
-    main()
+    main
