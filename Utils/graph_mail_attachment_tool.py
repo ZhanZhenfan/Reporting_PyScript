@@ -150,14 +150,14 @@ class GraphMailAttachmentTool:
             "client_id": self.auth.client_id,
             "scope": self.auth.scopes,
         }, timeout=self.request_timeout).json()
-        print("[LOGIN] 打开网址并输入验证码完成授权:")
+        print("[LOGIN] 打开网址并输入验证码完成授权 / Open the URL and enter the code to authorize:")
         print("         URL:", dc.get("verification_uri"))
         print("         CODE:", dc.get("user_code"))
-        print("         等待你完成登录...")
+        print("         等待你完成登录... / Waiting for you to finish sign-in...")
         start = time.time()
         while True:
             if time.time() - start > dc["expires_in"]:
-                raise RuntimeError("Device code 已过期，请重试运行。")
+                raise RuntimeError("Device code 已过期，请重试运行 / Device code expired, please rerun.")
             r = self.session.post(self.token_url, data={
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
                 "client_id": self.auth.client_id,
@@ -167,7 +167,7 @@ class GraphMailAttachmentTool:
             if "access_token" in d:
                 d["expires_at"] = self._now() + int(d.get("expires_in", 3600))
                 self._save_tok(d)
-                print("[LOGIN] ✅ 首次授权成功，已获取 Access Token")
+                print("[LOGIN] ✅ 首次授权成功，已获取 Access Token / First authorization succeeded; access token obtained")
                 return d
             if d.get("error") in ("authorization_pending", "slow_down"):
                 time.sleep(dc.get("interval", 5))
@@ -180,7 +180,7 @@ class GraphMailAttachmentTool:
             return tok["access_token"]
         tok2 = self._refresh(tok)
         if tok2 and "access_token" in tok2:
-            print("[LOGIN] 🔄 已刷新 Access Token")
+            print("[LOGIN] 🔄 已刷新 Access Token / Access token refreshed")
             return tok2["access_token"]
         tok3 = self._device_login()
         return tok3["access_token"]
@@ -343,9 +343,11 @@ class GraphMailAttachmentTool:
         out_paths = [p for _, p in saved][:need_count]
 
         if not out_paths:
-            print("[WARN] 未找到匹配附件。请检查关键词/扩展名或增大 days_back。")
+            print("[WARN] 未找到匹配附件。请检查关键词/扩展名或增大 days_back。"
+                  " / No matching attachments found. Check keywords/extensions or increase days_back.")
         else:
-            print(f"[OK] 下载完成，共 {len(out_paths)} 个。目录: {save_path.resolve()}")
+            print(f"[OK] 下载完成，共 {len(out_paths)} 个。目录: {save_path.resolve()} / "
+                  f"Download complete, total {len(out_paths)}. Folder: {save_path.resolve()}")
         return out_paths
 
 

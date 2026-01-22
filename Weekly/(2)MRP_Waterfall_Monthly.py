@@ -114,7 +114,7 @@ def list_matching_files_in_dir(
     return candidates
 
 def wait_folder_clear(folder: str, keywords: List[str], timeout_sec: int, poll_sec: int) -> bool:
-    print(f"⏳ 等待共享盘清空占位文件（关键词：{keywords}）...")
+    print(f"⏳ 等待共享盘清空占位文件（关键词：{keywords}）... / Waiting for share to clear blocking files (keywords: {keywords})...")
     t0 = time.time()
     while True:
         try:
@@ -123,10 +123,10 @@ def wait_folder_clear(folder: str, keywords: List[str], timeout_sec: int, poll_s
             names = []
         blocked = [n for n in names for k in keywords if k.lower() in n.lower()]
         if not blocked:
-            print("✅ 共享盘状态良好，可复制。")
+            print("✅ 共享盘状态良好，可复制。 / Share is clear; ready to copy.")
             return True
         if time.time() - t0 > timeout_sec:
-            print(f"⚠ 超时仍存在：{blocked[:5]} ...")
+            print(f"⚠ 超时仍存在：{blocked[:5]} ... / Timeout; still blocked: {blocked[:5]} ...")
             return False
         time.sleep(poll_sec)
 
@@ -144,7 +144,7 @@ def _normalize_material_text(s: str) -> str:
     return s
 
 def clean_workbook(in_xlsx: str, out_xlsx: str):
-    print(f"🧽 清洗（保物料号）：{in_xlsx}")
+    print(f"🧽 清洗（保物料号）：{in_xlsx} / Cleaning (keep material number): {in_xlsx}")
     wb = load_workbook(in_xlsx, data_only=True)
     ws = wb.active
 
@@ -172,13 +172,13 @@ def clean_workbook(in_xlsx: str, out_xlsx: str):
 
     ensure_dir(os.path.dirname(out_xlsx) or ".")
     wb.save(out_xlsx)
-    print(f"✔ 清洗完成 -> {out_xlsx}")
+    print(f"✔ 清洗完成 -> {out_xlsx} / Cleaning done -> {out_xlsx}")
 
 def copy_to_share(src_file: str, dest_folder: str) -> str:
     dest_path = os.path.join(dest_folder, DEST_FILENAME)
     Path(dest_folder).mkdir(parents=True, exist_ok=True)
     shutil.copy2(src_file, dest_path)
-    print(f"📤 已复制并覆盖共享盘：{dest_path}")
+    print(f"📤 已复制并覆盖共享盘：{dest_path} / Copied and replaced on share: {dest_path}")
     return dest_path
 
 
@@ -188,7 +188,7 @@ def fetch_from_email() -> str:
     """
     从邮箱下载到 LOCAL_TMP_DIR，返回最新文件路径。
     """
-    print("==== Step 1: 从邮箱下载月度文件 ====")
+    print("==== Step 1: 从邮箱下载月度文件 / Download monthly file from email ====")
     ensure_dir(LOCAL_TMP_DIR)
     graph_tool = GraphMailAttachmentTool(
         tenant_id=TENANT_ID,
@@ -222,15 +222,15 @@ def fetch_from_email() -> str:
 
     latest = newest_file(candidates)
     if not latest:
-        raise RuntimeError("未获取到任何附件文件。")
-    print(f"➡ 最新原始文件（邮箱）：{latest}")
+        raise RuntimeError("未获取到任何附件文件。 / No attachments were retrieved.")
+    print(f"➡ 最新原始文件（邮箱）：{latest} / Latest raw file (email): {latest}")
     return latest
 
 def fetch_from_folder() -> str:
     """
     直接在 FOLDER_SOURCE_DIR 中找匹配的最新文件，返回路径。
     """
-    print("==== Step 1: 从文件夹选择最新文件 ====")
+    print("==== Step 1: 从文件夹选择最新文件 / Pick latest file from folder ====")
     ensure_dir(FOLDER_SOURCE_DIR)
     candidates = list_matching_files_in_dir(
         folder=FOLDER_SOURCE_DIR,
@@ -241,13 +241,16 @@ def fetch_from_folder() -> str:
     )
     latest = newest_file(candidates)
     if not latest:
-        hint = f"目录为空或无匹配：{FOLDER_SOURCE_DIR}"
+        hint = f"目录为空或无匹配：{FOLDER_SOURCE_DIR} / Folder empty or no match: {FOLDER_SOURCE_DIR}"
         if FOLDER_GLOB_PATTERNS:
-            hint += f"；glob={FOLDER_GLOB_PATTERNS}"
+            hint += f"；glob={FOLDER_GLOB_PATTERNS} / glob={FOLDER_GLOB_PATTERNS}"
         else:
-            hint += f"；规则=equals:{ATTACHMENT_NAME_EQUALS} / contains:{ATTACHMENT_NAME_CONTAINS} / ext:{ATTACHMENT_EXT}"
+            hint += (
+                f"；规则=equals:{ATTACHMENT_NAME_EQUALS} / contains:{ATTACHMENT_NAME_CONTAINS} / ext:{ATTACHMENT_EXT}"
+                f" / rules=equals:{ATTACHMENT_NAME_EQUALS} / contains:{ATTACHMENT_NAME_CONTAINS} / ext:{ATTACHMENT_EXT}"
+            )
         raise RuntimeError(hint)
-    print(f"➡ 最新原始文件（文件夹）：{latest}")
+    print(f"➡ 最新原始文件（文件夹）：{latest} / Latest raw file (folder): {latest}")
     return latest
 
 def get_latest_input() -> str:
@@ -256,7 +259,7 @@ def get_latest_input() -> str:
     """
     mode = INPUT_MODE
     if mode not in ("email", "folder"):
-        print(f"⚠ 未知 INPUT_MODE={mode}，回退到 'folder'")
+        print(f"⚠ 未知 INPUT_MODE={mode}，回退到 'folder' / Unknown INPUT_MODE={mode}, falling back to 'folder'")
         mode = "folder"
 
     if mode == "email":
@@ -268,13 +271,13 @@ def get_latest_input() -> str:
 # ============ 主流程：清洗 + 复制 + 触发Job ============
 
 def main():
-    print(f"==== MRP Waterfall（输入源：{INPUT_MODE}）====")
+    print(f"==== MRP Waterfall（输入源：{INPUT_MODE}）==== / MRP Waterfall (source: {INPUT_MODE}) ====")
 
     # Step 1：拿到“原始文件”
     latest_raw = get_latest_input()
 
     # Step 2 & 3：清洗
-    print("\n==== Step 2 & 3: 另存并清洗 ====")
+    print("\n==== Step 2 & 3: 另存并清洗 / Save as and clean ====")
     ensure_dir(LOCAL_CLEAN_DIR)
     cleaned_tmp = os.path.join(
         LOCAL_CLEAN_DIR,
@@ -283,16 +286,17 @@ def main():
     clean_workbook(latest_raw, cleaned_tmp)
 
     # Step 4：等待共享盘空闲并复制
-    print("\n==== Step 4: 复制到共享盘（含占位检查） ====")
+    print("\n==== Step 4: 复制到共享盘（含占位检查） / Copy to share (with blocking check) ====")
     ok = wait_folder_clear(SHARE_DEST_DIR, BLOCKING_NAME_KEYWORDS, WAIT_TIMEOUT_SEC, WAIT_POLL_SEC)
     if not ok:
-        print("⚠ 未能确认共享盘空闲。为安全起见，本次不复制。你可以稍后手动把下列文件放进去：")
+        print("⚠ 未能确认共享盘空闲。为安全起见，本次不复制。你可以稍后手动把下列文件放进去："
+              " / Share not confirmed clear; skip copy for safety. You can manually place this file later:")
         print(f"   {cleaned_tmp}")
         return
     dest = copy_to_share(cleaned_tmp, SHARE_DEST_DIR)
 
     # Step 5：触发 SQL Job
-    print("\n==== Step 5: 触发 SQL Job ====")
+    print("\n==== Step 5: 触发 SQL Job / Trigger SQL Job ====")
     if SQL_SERVER and SQL_JOB_NAME and ARCHIVE_DIR:
         sql_tool = SqlAgentTool(server=SQL_SERVER)
         result = sql_tool.run_job(
@@ -304,12 +308,13 @@ def main():
         )
         print("[JOB RESULT]", result)
     else:
-        print("（跳过 Job：请在配置区填写 SQL_SERVER / SQL_JOB_NAME / ARCHIVE_DIR 后启用）")
+        print("（跳过 Job：请在配置区填写 SQL_SERVER / SQL_JOB_NAME / ARCHIVE_DIR 后启用） / "
+              "Job skipped: fill SQL_SERVER / SQL_JOB_NAME / ARCHIVE_DIR in config to enable.")
 
-    print("\n✅ 全流程完成。")
-    print("原始下载：", latest_raw)
-    print("清洗临时：", cleaned_tmp)
-    print("共享盘路径：", dest)
+    print("\n✅ 全流程完成。 / Full workflow completed.")
+    print("原始下载：", latest_raw, "/ Raw download:", latest_raw)
+    print("清洗临时：", cleaned_tmp, "/ Cleaned temp:", cleaned_tmp)
+    print("共享盘路径：", dest, "/ Share path:", dest)
 
 if __name__ == "__main__":
     main()

@@ -20,7 +20,7 @@ def latest_file_by_keyword(keyword: str):
     """
     candidates = [f for f in glob(os.path.join(ARCHIVED, "*.xlsx")) if os.path.isfile(f)]
     if not candidates:
-        raise FileNotFoundError("Archived 中未找到任何 .xlsx。")
+        raise FileNotFoundError("Archived 中未找到任何 .xlsx。 / No .xlsx found in Archived.")
 
     if keyword:
         matches = [f for f in candidates if keyword.lower() in os.path.basename(f).lower()]
@@ -38,14 +38,14 @@ def copy_and_rename(keyword: str, prefix: str):
     dest_path = os.path.join(ROOT, dest_name)
 
     shutil.copy2(src, dest_path)
-    print(f"✅ 已复制并重命名：\n  来源: {src}\n  目标: {dest_path}")
+    print(f"✅ 已复制并重命名：\n  来源: {src}\n  目标: {dest_path}\n  / Copied and renamed:")
 
 def main():
     for kw, prefix in OUTPUT_PREFIXES.items():
         try:
             copy_and_rename(kw, prefix)
         except Exception as e:
-            print(f"⚠ {prefix} 未能处理: {e}")
+            print(f"⚠ {prefix} 未能处理: {e} / Failed to process {prefix}: {e}")
 
 if __name__ == "__main__":
     main()

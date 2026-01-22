@@ -65,7 +65,7 @@ def main():
 
     for keyword, (target_name,) in JOBS.items():
         contains = f"KKAQ_{keyword}_"
-        print(f"\n=== 拉取 {contains}* 最新一份 ===")
+        print(f"\n=== 拉取 {contains}* 最新一份 === / Fetch latest {contains}* ===")
 
         paths = tool.download_latest_attachments(
             contains=contains,
@@ -77,23 +77,26 @@ def main():
         )
         latest = newest([str(p) for p in paths])
         if not latest:
-            print(f"⚠ 没找到附件：{contains}*.xlsx（请检查邮箱/关键字/时间窗口）")
+            print(f"⚠ 没找到附件：{contains}*.xlsx（请检查邮箱/关键字/时间窗口） / "
+                  f"No attachment found: {contains}*.xlsx (check mailbox/keyword/time window)")
             continue
 
         # 打印接收时间与大小
         recv_utc = extract_received_utc_from_name(latest)
         sz = os.path.getsize(latest)
         if recv_utc:
-            print(f"  • 选用附件：{os.path.basename(latest)}")
-            print(f"  • 接收时间(UTC)：{recv_utc.strftime('%Y-%m-%d %H:%M:%S')}  | 大小：{sz:,} bytes")
+            print(f"  • 选用附件：{os.path.basename(latest)} / Selected attachment: {os.path.basename(latest)}")
+            print(f"  • 接收时间(UTC)：{recv_utc.strftime('%Y-%m-%d %H:%M:%S')}  | 大小：{sz:,} bytes / "
+                  f"Received (UTC): {recv_utc.strftime('%Y-%m-%d %H:%M:%S')} | Size: {sz:,} bytes")
         else:
-            print(f"  • 选用附件：{os.path.basename(latest)}（未解析到时间戳） | 大小：{sz:,} bytes")
+            print(f"  • 选用附件：{os.path.basename(latest)}（未解析到时间戳） | 大小：{sz:,} bytes / "
+                  f"Selected attachment: {os.path.basename(latest)} (timestamp not parsed) | Size: {sz:,} bytes")
 
         dest_path = os.path.join(DEST_DIR, target_name)
         shutil.copy2(latest, dest_path)  # 覆盖
-        print(f"✅ 已复制并重命名：{latest}  →  {dest_path}")
+        print(f"✅ 已复制并重命名：{latest}  →  {dest_path} / Copied and renamed: {latest} -> {dest_path}")
 
-    print("\n🎉 全部完成。")
+    print("\n🎉 全部完成。 / All done.")
 
 if __name__ == "__main__":
     main()

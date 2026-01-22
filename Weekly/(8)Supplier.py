@@ -159,14 +159,14 @@ def copy_to_this_week(latest_path: str, this_week_token: str) -> str:
     dst_path = os.path.join(BASE_DIR, dst_name)
 
     if os.path.abspath(dst_path) == os.path.abspath(latest_path):
-        print(f"  本周文件已就绪：{dst_name}")
+        print(f"  本周文件已就绪：{dst_name} / This week's file is ready: {dst_name}")
         return latest_path
     if os.path.exists(dst_path):
-        print(f"  本周文件已存在：{dst_name}")
+        print(f"  本周文件已存在：{dst_name} / This week's file already exists: {dst_name}")
         return dst_path
 
     shutil.copy2(latest_path, dst_path)
-    print(f"  复制为本周文件：{dst_name}")
+    print(f"  复制为本周文件：{dst_name} / Copied as this week's file: {dst_name}")
     return dst_path
 
 
@@ -213,7 +213,8 @@ def open_wb_with_retry(path, tries=6, delay=1.0):
         except Exception as e:
             last_err = e
             time.sleep(delay)
-    raise RuntimeError(f"无法打开文件：{path}\n最后错误：{last_err}")
+    raise RuntimeError(f"无法打开文件：{path}\n最后错误：{last_err} / "
+                       f"Unable to open file: {path}\nLast error: {last_err}")
 
 def col_to_index(ws, col):
     if isinstance(col, int): return col
@@ -367,7 +368,7 @@ def refresh_and_format(file_path: str):
                 pass
     excel.CalculateUntilAsyncQueriesDone()
     wb.Save(); wb.Close(SaveChanges=True); excel.Quit()
-    print("  刷新完成")
+    print("  刷新完成 / Refresh complete")
 
     # Phase 2: 写入 + 裁剪 + 硬缩
     app2, wb2 = open_wb_with_retry(file_path, tries=6, delay=1.2)
@@ -427,14 +428,14 @@ def refresh_and_format(file_path: str):
     ws3 = wb3.Sheets(SHEET_NAME)
     _ = ws3.UsedRange
     wb3.Save(); wb3.Close(SaveChanges=True); app3.Quit()
-    print("  表内整理完成")
+    print("  表内整理完成 / In-sheet cleanup complete")
 
 
 # ---------- 主流程 ----------
 def main():
     print("==== Supplier – Weekly ====")
     last_token, this_token = compute_week_tokens()  # 例：("W40'25", "W41'25")
-    print(f"周标：上周 {last_token} | 本周 {this_token}")
+    print(f"周标：上周 {last_token} | 本周 {this_token} / Week tokens: last {last_token} | this {this_token}")
 
     # 1) 先按“上周周标”精确查找
     last_path = find_file_for_week(BASE_DIR, last_token)
@@ -447,20 +448,20 @@ def main():
         # 最后兜底：用 glob（与旧逻辑一致）
         cands = [f for f in glob(os.path.join(BASE_DIR, GLOB_PATTERN)) if os.path.isfile(f)]
         if not cands:
-            raise FileNotFoundError(f"未找到任何周文件：{BASE_DIR}")
+            raise FileNotFoundError(f"未找到任何周文件：{BASE_DIR} / No weekly files found in {BASE_DIR}")
         cands.sort(key=os.path.getmtime, reverse=True)
         last_path = cands[0]
 
-    print(f"上周文件：{os.path.basename(last_path)}")
+    print(f"上周文件：{os.path.basename(last_path)} / Last week's file: {os.path.basename(last_path)}")
 
     # 3) 复制成本周命名（若已存在则直接使用）
     cur_path = copy_to_this_week(last_path, this_token)
-    print(f"本周文件：{os.path.basename(cur_path)}")
+    print(f"本周文件：{os.path.basename(cur_path)} / This week's file: {os.path.basename(cur_path)}")
 
     # 4) 刷新 & 表内处理
     refresh_and_format(cur_path)
 
-    print("✅ 完成")
+    print("✅ 完成 / Done")
 
 if __name__ == "__main__":
     main()

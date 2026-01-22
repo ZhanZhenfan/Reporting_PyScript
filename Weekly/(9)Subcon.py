@@ -96,7 +96,7 @@ def find_latest(base_dir: str, pattern: str, which: str) -> str:
     # 回退：glob 四种撇号变体
     cands = _glob_variants(base_dir, pattern)
     if not cands:
-        raise FileNotFoundError(f"未在 {base_dir} 找到匹配文件：{pattern}")
+        raise FileNotFoundError(f"未在 {base_dir} 找到匹配文件：{pattern} / No matching file in {base_dir}: {pattern}")
     cands.sort(key=os.path.getmtime, reverse=True)
     return cands[0]
 
@@ -119,13 +119,16 @@ def make_this_week_name(from_name: str, wyy: str) -> str:
 def copy_to_this_week(base_dir: str, latest_path: str, wyy: str) -> str:
     dst = os.path.join(base_dir, make_this_week_name(os.path.basename(latest_path), wyy))
     if os.path.abspath(dst) == os.path.abspath(latest_path):
-        print("⚠ 已经是本周命名，无需复制：", os.path.basename(dst))
+        print("⚠ 已经是本周命名，无需复制：", os.path.basename(dst),
+              "/ Already this week's name; no copy needed:", os.path.basename(dst))
         return latest_path
     if os.path.exists(dst):
-        print("ℹ 本周文件已存在：", os.path.basename(dst))
+        print("ℹ 本周文件已存在：", os.path.basename(dst),
+              "/ This week's file already exists:", os.path.basename(dst))
         return dst
     shutil.copy2(latest_path, dst)
-    print("✔ 已复制为本周文件：", os.path.basename(dst))
+    print("✔ 已复制为本周文件：", os.path.basename(dst),
+          "/ Copied as this week's file:", os.path.basename(dst))
     return dst
 
 # ---------------- Excel 操作工具 ----------------
@@ -143,7 +146,7 @@ def open_wb_with_retry(path, tries=6, delay=1.0):
 
     # 1) 本地先校验一下路径是否真存在（避免无谓重试）
     if not os.path.exists(path):
-        raise FileNotFoundError(f"路径不存在：{path}")
+        raise FileNotFoundError(f"路径不存在：{path} / Path does not exist: {path}")
 
     for i in range(1, tries + 1):
         try:
@@ -163,7 +166,8 @@ def open_wb_with_retry(path, tries=6, delay=1.0):
             path = path.replace("''", "'")
             time.sleep(delay)
 
-    raise RuntimeError(f"无法打开文件：{path}\n最后错误：{last_err}")
+    raise RuntimeError(f"无法打开文件：{path}\n最后错误：{last_err} / "
+                       f"Unable to open file: {path}\nLast error: {last_err}")
 
 def first_table(ws):
     try:
@@ -252,7 +256,7 @@ def refresh_target_connection_or_qt(app, wb, ws, conn_name) -> bool:
         app.CalculateUntilAsyncQueriesDone()
         return True
     except Exception as e:
-        print(f"⚠️ 无法刷新连接 {conn_name}: {e}")
+        print(f"⚠️ 无法刷新连接 {conn_name}: {e} / Failed to refresh connection {conn_name}: {e}")
         return False
 
 # ===== 新增：展开并移除所有筛选 =====
@@ -300,7 +304,7 @@ def expand_and_clear_filters(ws):
 
 # ---------------- 单文件处理 ----------------
 def process_file(path: str):
-    print(f"\n=== 处理文件 === {os.path.basename(path)}")
+    print(f"\n=== 处理文件 === {os.path.basename(path)} / Processing file: {os.path.basename(path)}")
 
     # Phase 1: 刷新
     print("🔄 Refreshing ...")
@@ -356,29 +360,29 @@ def process_file(path: str):
     wb2.Save(); wb2.Close(SaveChanges=True)
     app2.EnableEvents = True; app2.ScreenUpdating = True
     app2.Quit()
-    print("🎉 BH 填充完成")
+    print("🎉 BH 填充完成 / BH fill completed")
 
 # ---------------- 主流程 ----------------
 def main():
-    print("==== Subcon – 复制到本周并自动处理 ====")
+    print("==== Subcon – 复制到本周并自动处理 ==== / Subcon – copy to this week and auto process ====")
     wyy = compute_week_token()
-    print("本周标识:", wyy)
+    print("本周标识:", wyy, "/ Week token:", wyy)
 
     latest_ch  = find_latest(BASE_DIR, PATTERN_CHINA, which="china")
     latest_nc  = find_latest(BASE_DIR, PATTERN_NONCHINA, which="nonchina")
-    print("源(China):", os.path.basename(latest_ch))
-    print("源(NonChina):", os.path.basename(latest_nc))
+    print("源(China):", os.path.basename(latest_ch), "/ Source (China):", os.path.basename(latest_ch))
+    print("源(NonChina):", os.path.basename(latest_nc), "/ Source (NonChina):", os.path.basename(latest_nc))
 
     out_ch = copy_to_this_week(BASE_DIR, latest_ch, wyy)
     out_nc = copy_to_this_week(BASE_DIR, latest_nc, wyy)
-    print("本周(China):", os.path.basename(out_ch))
-    print("本周(NonChina):", os.path.basename(out_nc))
+    print("本周(China):", os.path.basename(out_ch), "/ This week (China):", os.path.basename(out_ch))
+    print("本周(NonChina):", os.path.basename(out_nc), "/ This week (NonChina):", os.path.basename(out_nc))
 
     # 依次处理两个新文件
     process_file(out_ch)
     process_file(out_nc)
 
-    print("\n✅ 全部完成。")
+    print("\n✅ 全部完成。 / All done.")
 
 if __name__ == "__main__":
     main()

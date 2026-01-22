@@ -96,10 +96,13 @@ class SqlAgentTool:
                 like,
             ).fetchall()
             if not rows:
-                raise ValueError(f"未找到匹配 Job: {job_name}")
+                raise ValueError(f"未找到匹配 Job: {job_name} / No matching job found: {job_name}")
             if len(rows) > 1:
                 names = ", ".join(r[0] for r in rows)
-                raise ValueError(f"匹配到多个 Job（请改更精确或 fuzzy=False）: {names}")
+                raise ValueError(
+                    f"匹配到多个 Job（请改更精确或 fuzzy=False）: {names} / "
+                    f"Multiple jobs matched (use a more specific name or fuzzy=False): {names}"
+                )
             return rows[0][0]
         except pyodbc.ProgrammingError:
             return job_name
@@ -161,7 +164,7 @@ class SqlAgentTool:
         baseline_state: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         if not os.path.isdir(archive_dir):
-            raise FileNotFoundError(f"Archive 目录不存在：{archive_dir}")
+            raise FileNotFoundError(f"Archive 目录不存在：{archive_dir} / Archive directory not found: {archive_dir}")
 
         if baseline_state is None:
             baseline_state = self._latest_file_state(archive_dir, pattern)
@@ -170,7 +173,7 @@ class SqlAgentTool:
         base_mtm = baseline_state["latest_mtime"]
         base_name = baseline_state["latest_file"]
 
-        print(f"⏳ 监控目录：{archive_dir} | 模式：{pattern}")
+        print(f"⏳ 监控目录：{archive_dir} | 模式：{pattern} / Monitoring folder: {archive_dir} | Pattern: {pattern}")
         t0 = time.time()
         while True:
             cur = self._latest_file_state(archive_dir, pattern)
@@ -182,7 +185,7 @@ class SqlAgentTool:
                     return {"ok": True, "detected": cur}
 
             if time.time() - t0 > timeout:
-                raise TimeoutError(f"等待归档新文件超时（{timeout}s）")
+                raise TimeoutError(f"等待归档新文件超时（{timeout}s） / Timeout waiting for new archive file ({timeout}s)")
             time.sleep(poll_interval)
 
     # ----------- Main Run Job API -----------
@@ -230,21 +233,29 @@ class SqlAgentTool:
                 if not step_name_to_start:
                     self._beep_fail()
                     raise ValueError(
-                        f"指定的 step_id={start_step} 在 Job '{target_name}' 中不存在或不可访问。已停止执行。"
+                        f"指定的 step_id={start_step} 在 Job '{target_name}' 中不存在或不可访问。已停止执行。 / "
+                        f"step_id={start_step} not found or inaccessible in job '{target_name}'. Stopping."
                     )
-                print(f"▶ 启动 SQL Job: {target_name}（按 step_id={start_step} → step_name='{step_name_to_start}'）")
+                print(
+                    f"▶ 启动 SQL Job: {target_name}（按 step_id={start_step} → step_name='{step_name_to_start}'） / "
+                    f"Starting SQL Job: {target_name} (step_id={start_step} -> step_name='{step_name_to_start}')"
+                )
 
             elif isinstance(start_step, str) and start_step.strip():
                 step_name_to_start = start_step.strip()
                 if not self._step_exists_by_name(cur, target_name, step_name_to_start):
                     self._beep_fail()
                     raise ValueError(
-                        f"指定的 step_name='{step_name_to_start}' 在 Job '{target_name}' 中不存在。已停止执行。"
+                        f"指定的 step_name='{step_name_to_start}' 在 Job '{target_name}' 中不存在。已停止执行。 / "
+                        f"step_name='{step_name_to_start}' not found in job '{target_name}'. Stopping."
                     )
-                print(f"▶ 启动 SQL Job: {target_name}（按 step_name='{step_name_to_start}'）")
+                print(
+                    f"▶ 启动 SQL Job: {target_name}（按 step_name='{step_name_to_start}'） / "
+                    f"Starting SQL Job: {target_name} (step_name='{step_name_to_start}')"
+                )
 
             else:
-                print(f"▶ 启动 SQL Job: {target_name}（从 Step 1 开始）")
+                print(f"▶ 启动 SQL Job: {target_name}（从 Step 1 开始） / Starting SQL Job: {target_name} (from Step 1)")
 
             # 文件检测基线（若启用）
             baseline_state = None
@@ -259,7 +270,7 @@ class SqlAgentTool:
 
             # 文件检测模式（优先）
             if use_file_watch and archive_dir:
-                print("⏳ 等待归档目录出现新文件（文件监控判定成功）...")
+                print("⏳ 等待归档目录出现新文件（文件监控判定成功）... / Waiting for new files in archive folder...")
                 ok = self._poll_until_file_appears(
                     archive_dir=archive_dir,
                     pattern=archive_pattern,
@@ -275,7 +286,8 @@ class SqlAgentTool:
                     return {"ok": True, "job": target_name, "mode": "file_watch", **ok}
 
             # 兜底：未启用文件检测则简单等待 timeout 秒后返回
-            print("ℹ️ 未启用文件检测模式，将等待数据库任务状态返回（或超时）…")
+            print("ℹ️ 未启用文件检测模式，将等待数据库任务状态返回（或超时）… / "
+                  "File watch disabled; waiting for job status (or timeout)...")
             time.sleep(timeout)
             self._beep_ok()
             return {"ok": True, "job": target_name, "mode": "timeout-fallback"}

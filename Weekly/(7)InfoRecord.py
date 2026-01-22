@@ -34,7 +34,7 @@ def find_latest_inforecord(src_dir: str) -> Optional[str]:
     再在该子文件夹内选择最新的  PR1 Info Record*.xlsx  文件，返回完整路径。
     """
     if not os.path.isdir(src_dir):
-        print(f"⚠ 路径不存在：{src_dir}")
+        print(f"⚠ 路径不存在：{src_dir} / Path not found: {src_dir}")
         return None
 
     # 取所有子目录
@@ -44,13 +44,13 @@ def find_latest_inforecord(src_dir: str) -> Optional[str]:
         if os.path.isdir(os.path.join(src_dir, d))
     ]
     if not subdirs:
-        print("⚠ 未找到任何子文件夹。")
+        print("⚠ 未找到任何子文件夹。 / No subfolders found.")
         return None
 
     # 最新修改时间优先
     subdirs.sort(key=os.path.getmtime, reverse=True)
     newest_dir = subdirs[0]
-    print(f"📁 最新子目录：{newest_dir}")
+    print(f"📁 最新子目录：{newest_dir} / Latest subfolder: {newest_dir}")
 
     # 仅匹配 “PR1 Info Record*.xlsx”，忽略 Excel 临时文件 "~$*.xlsx"
     cand_files = [
@@ -61,12 +61,12 @@ def find_latest_inforecord(src_dir: str) -> Optional[str]:
         and not f.startswith("~$")
     ]
     if not cand_files:
-        print("⚠ 最新子目录内未找到 PR1 Info Record*.xlsx")
+        print("⚠ 最新子目录内未找到 PR1 Info Record*.xlsx / No PR1 Info Record*.xlsx in latest subfolder")
         return None
 
     cand_files.sort(key=os.path.getmtime, reverse=True)
     latest_file = cand_files[0]
-    print(f"✅ 选定源文件：{latest_file}")
+    print(f"✅ 选定源文件：{latest_file} / Selected source file: {latest_file}")
     return latest_file
 
 
@@ -85,17 +85,19 @@ def is_blocking_present(folder: str) -> list[str]:
 
 
 def wait_dest_clear(dest_dir: str) -> bool:
-    print(f"⏳ 检查目标目录是否空闲：{dest_dir}")
+    print(f"⏳ 检查目标目录是否空闲：{dest_dir} / Checking if destination folder is clear: {dest_dir}")
     t0 = time.time()
     while True:
         hits = is_blocking_present(dest_dir)
         if not hits:
-            print("  ✅ 目标目录无阻塞文件，可以写入。")
+            print("  ✅ 目标目录无阻塞文件，可以写入。 / No blocking files; ready to write.")
             return True
         waited = int(time.time() - t0)
-        print(f"  … 检测到阻塞文件：{hits[:5]}（已等 {waited}s）")
+        print(f"  … 检测到阻塞文件：{hits[:5]}（已等 {waited}s） / "
+              f"Blocking files detected: {hits[:5]} (waited {waited}s)")
         if time.time() - t0 > WAIT_TIMEOUT_SEC:
-            print("  ⚠ 等待超时，仍存在阻塞文件。为安全起见，本次不覆盖落盘。")
+            print("  ⚠ 等待超时，仍存在阻塞文件。为安全起见，本次不覆盖落盘。 / "
+                  "Timeout; blocking files remain. Skipping write for safety.")
             return False
         time.sleep(WAIT_POLL_SEC)
 
@@ -128,16 +130,17 @@ def process_workbook_and_save(xlsx_path: str,
     """
     直接把清洗后的内容保存到 out_path（不会在源目录生成任何临时文件）。
     """
-    print(f"🔧 打开工作簿：{xlsx_path}")
+    print(f"🔧 打开工作簿：{xlsx_path} / Opening workbook: {xlsx_path}")
     wb = load_workbook(xlsx_path)  # 不用 data_only，避免公式被提前求值
     ws = wb.worksheets[sheet_index]
 
     max_row = ws.max_row
-    print(f"  工作表：{ws.title} | 行数≈{max_row}")
+    print(f"  工作表：{ws.title} | 行数≈{max_row} / Sheet: {ws.title} | Rows≈{max_row}")
 
     # Step 3：清洗 L 列（去前导0 + 设为文本）
     col_letter = get_column_letter(col_l_idx)
-    print(f"  Step 3 | 处理列 {col_letter}：去前导 0（仅纯数字），并设置为文本格式 …")
+    print(f"  Step 3 | 处理列 {col_letter}：去前导 0（仅纯数字），并设置为文本格式 … / "
+          f"Step 3 | Column {col_letter}: remove leading zeros (numeric only) and set text format ...")
 
     changed = 0
     for r in range(2, max_row + 1):
@@ -148,10 +151,11 @@ def process_workbook_and_save(xlsx_path: str,
         cell.value = new_val
         cell.number_format = "@"  # 文本格式
 
-    print(f"    ✔ L 列处理完成，改动约 {changed} 行。")
+    print(f"    ✔ L 列处理完成，改动约 {changed} 行。 / L column done, ~{changed} rows changed.")
 
     # Step 4：在 Q 列插入空列 + 表头
-    print(f"  Step 4 | 在第 {ins_q_idx} 列插入新列，并命名为 '{header_q}'（整列空白） …")
+    print(f"  Step 4 | 在第 {ins_q_idx} 列插入新列，并命名为 '{header_q}'（整列空白） … / "
+          f"Step 4 | Insert new column {ins_q_idx} named '{header_q}' (blank column) ...")
     ws.insert_cols(ins_q_idx, amount=1)
     ws.cell(row=1, column=ins_q_idx).value = header_q
     for r in range(2, max_row + 1):
@@ -159,7 +163,7 @@ def process_workbook_and_save(xlsx_path: str,
 
     # 保存到目标
     wb.save(out_path)
-    print(f"  💾 已保存清洗结果：{out_path}")
+    print(f"  💾 已保存清洗结果：{out_path} / Saved cleaned result: {out_path}")
     return out_path
 
 
@@ -170,16 +174,17 @@ def backup_if_exists(dest_path: str) -> None:
         bak = dest_path.replace(".xlsx", f".{ts}.bak.xlsx")
         try:
             shutil.move(dest_path, bak)
-            print(f"  ℹ 发现旧文件，已备份为：{os.path.basename(bak)}")
+            print(f"  ℹ 发现旧文件，已备份为：{os.path.basename(bak)} / Existing file backed up: {os.path.basename(bak)}")
         except Exception as e:
-            print(f"  ⚠ 备份旧文件失败：{e}")
+            print(f"  ⚠ 备份旧文件失败：{e} / Failed to back up existing file: {e}")
 
 
 def main():
     # 1) 找最新 PR1 Info Record
     latest = find_latest_inforecord(SRC_DIR)
     if not latest:
-        print(f"❌ 在 {SRC_DIR} 的最新子目录未找到 PR1 Info Record*.xlsx")
+        print(f"❌ 在 {SRC_DIR} 的最新子目录未找到 PR1 Info Record*.xlsx / "
+              f"PR1 Info Record*.xlsx not found in latest subfolder of {SRC_DIR}")
         return
 
     # 2) 目标准备
@@ -188,16 +193,16 @@ def main():
 
     # 3) 等待目标目录空闲（如不需要可直接注释下一段）
     if not wait_dest_clear(DEST_DIR):
-        print("⛔ 因目标目录被占用，本次未执行落盘。")
+        print("⛔ 因目标目录被占用，本次未执行落盘。 / Destination is busy; skipping write.")
         return
 
     # 4) 备份旧文件并覆盖保存
     backup_if_exists(dest_path)
     process_workbook_and_save(latest, dest_path)
 
-    print("\n🎉 完成：")
-    print("  源文件：", latest)
-    print("  目标文件：", dest_path)
+    print("\n🎉 完成： / Completed:")
+    print("  源文件：", latest, "/ Source file:", latest)
+    print("  目标文件：", dest_path, "/ Destination file:", dest_path)
 
     tool = SqlAgentTool(server="tcp:10.80.127.71,1433")
 

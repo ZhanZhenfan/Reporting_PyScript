@@ -27,7 +27,7 @@ COL_HEADER  = "Delivery Num"
 
 def find_latest_drm_report(src_dir: str) -> Optional[str]:
     if not os.path.isdir(src_dir):
-        print(f"⚠ 目录不存在：{src_dir}")
+        print(f"⚠ 目录不存在：{src_dir} / Directory not found: {src_dir}")
         return None
     cands = []
     for name in os.listdir(src_dir):
@@ -122,21 +122,21 @@ def process_with_excel_com(dest_path: str) -> None:
 def main():
     src_file = find_latest_drm_report(SRC_DIR)
     if not src_file:
-        print(f"❌ 在 {SRC_DIR} 未找到 'DRM Report*.xlsx'")
+        print(f"❌ 在 {SRC_DIR} 未找到 'DRM Report*.xlsx' / 'DRM Report*.xlsx' not found in {SRC_DIR}")
         return
-    print(f"✅ 选定源文件：{src_file}")
+    print(f"✅ 选定源文件：{src_file} / Selected source file: {src_file}")
 
     os.makedirs(DEST_DIR, exist_ok=True)
     dest_path = os.path.join(DEST_DIR, DEST_FN)
 
     shutil.copy2(src_file, dest_path)
-    print(f"📤 已复制到：{dest_path}")
+    print(f"📤 已复制到：{dest_path} / Copied to: {dest_path}")
 
     process_with_excel_com(dest_path)
 
-    print("\n🎉 完成：")
-    print("  源文件：", src_file)
-    print("  目标：  ", dest_path)
+    print("\n🎉 完成： / Completed:")
+    print("  源文件：", src_file, "/ Source:", src_file)
+    print("  目标：  ", dest_path, "/ Destination:", dest_path)
 
     tool = SqlAgentTool(server="tcp:10.80.127.71,1433")
 

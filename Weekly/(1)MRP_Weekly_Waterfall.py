@@ -27,7 +27,7 @@ downloaded_paths = down.download_latest_attachments(
     mail_folder="inbox",        # 可不填；想限定收件箱就留着
 )
 
-print("[INFO] 下载到：", [p.name for p in downloaded_paths])
+print("[INFO] 下载到：", [p.name for p in downloaded_paths], "/ Downloaded:", [p.name for p in downloaded_paths])
 
 
 # ------------ 工具函数 ------------
@@ -51,13 +51,14 @@ def pick_big_small(files):
 def main():
     src = Path(SRC_DIR)
     if not src.is_dir():
-        print(f"[ERROR] 源目录不存在: {SRC_DIR}")
+        print(f"[ERROR] 源目录不存在: {SRC_DIR} / Source directory not found: {SRC_DIR}")
         sys.exit(1)
 
     # 1) 找到两份 ZMRP_WATERFALL_Run*.xlsx
     candidates = list(src.glob("ZMRP_WATERFALL_Run*.xlsx"))
     if len(candidates) < 2:
-        print(f"[ERROR] 没找到两份文件，当前匹配到 {len(candidates)}: {[f.name for f in candidates]}")
+        print(f"[ERROR] 没找到两份文件，当前匹配到 {len(candidates)}: {[f.name for f in candidates]} / "
+              f"Expected 2 files but found {len(candidates)}: {[f.name for f in candidates]}")
         sys.exit(1)
 
     # 只取最新的两份（按修改时间降序）
@@ -65,8 +66,10 @@ def main():
     files_to_use = candidates[:2]
 
     big_file, small_file = pick_big_small(files_to_use)
-    print(f"[INFO] 大文件: {Path(big_file).name}  ({os.path.getsize(big_file):,} bytes)")
-    print(f"[INFO] 小文件: {Path(small_file).name}  ({os.path.getsize(small_file):,} bytes)")
+    print(f"[INFO] 大文件: {Path(big_file).name}  ({os.path.getsize(big_file):,} bytes) / "
+          f"Big file: {Path(big_file).name} ({os.path.getsize(big_file):,} bytes)")
+    print(f"[INFO] 小文件: {Path(small_file).name}  ({os.path.getsize(small_file):,} bytes) / "
+          f"Small file: {Path(small_file).name} ({os.path.getsize(small_file):,} bytes)")
 
     # 2) 读取并上下拼接：小文件去掉第一行
     #   - 默认取第一个工作表；保留大文件的列顺序
@@ -91,17 +94,17 @@ def main():
 
     # 写出到本地源目录
     merged.to_excel(out_path, index=False)
-    print(f"[OK] 已保存合并文件: {out_path}")
+    print(f"[OK] 已保存合并文件: {out_path} / Merged file saved: {out_path}")
 
     # 复制到共享盘（若无权限或网络不可达会抛错）
     share_target = Path(SHARE_DIR) / out_name
     # 确保共享目录存在
     if not Path(SHARE_DIR).exists():
-        print(f"[ERROR] 共享路径不可访问: {SHARE_DIR}")
+        print(f"[ERROR] 共享路径不可访问: {SHARE_DIR} / Share path not accessible: {SHARE_DIR}")
         sys.exit(1)
 
     shutil.copy2(out_path, share_target)
-    print(f"[OK] 已复制到共享盘: {share_target}")
+    print(f"[OK] 已复制到共享盘: {share_target} / Copied to shared folder: {share_target}")
 
     # 4) 触发 SQL Agent Job
     tool = SqlAgentTool(server="tcp:10.80.127.71,1433")
@@ -117,12 +120,12 @@ def main():
     # 5) SQL 作业完成后，打开 Excel 宏文件
     try:
         if os.path.exists(EXCEL_MACRO_PATH):
-            print(f"[INFO] 正在打开 Excel 文件: {EXCEL_MACRO_PATH}")
+            print(f"[INFO] 正在打开 Excel 文件: {EXCEL_MACRO_PATH} / Opening Excel file: {EXCEL_MACRO_PATH}")
             os.startfile(EXCEL_MACRO_PATH)
         else:
-            print(f"[WARN] 找不到要打开的 Excel 文件: {EXCEL_MACRO_PATH}")
+            print(f"[WARN] 找不到要打开的 Excel 文件: {EXCEL_MACRO_PATH} / Excel file not found: {EXCEL_MACRO_PATH}")
     except Exception as e:
-        print(f"[ERROR] 打开 Excel 文件失败: {e}")
+        print(f"[ERROR] 打开 Excel 文件失败: {e} / Failed to open Excel file: {e}")
 
 
 if __name__ == "__main__":

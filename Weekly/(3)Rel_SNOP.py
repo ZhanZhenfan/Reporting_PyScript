@@ -47,7 +47,7 @@ def atomic_copy(src: Path, dst: Path):
 root = ROOT
 base_path = root / BASE_NAME
 if not base_path.exists():
-    raise FileNotFoundError(f"未找到 {base_path}")
+    raise FileNotFoundError(f"未找到 {base_path} / Not found: {base_path}")
 
 # 简易互斥：若锁文件已存在，直接退出（避免多实例并发）
 lock_path = root / LOCK_NAME
@@ -56,7 +56,8 @@ try:
     os.write(lock_fd, b"lock")
     os.close(lock_fd)
 except FileExistsError:
-    print("发现锁文件，可能已有实例在运行。本次退出以保证幂等。")
+    print("发现锁文件，可能已有实例在运行。本次退出以保证幂等。 / "
+          "Lock file found; another instance may be running. Exiting for safety.")
     raise SystemExit(0)
 
 try:
@@ -71,15 +72,16 @@ try:
             src_hash = sha256(base_path)
             dst_hash = sha256(dated_path)
             if src_hash == dst_hash:
-                print(f"[幂等] 备份已存在且内容一致：{dated_path.name}，跳过复制。")
+                print(f"[幂等] 备份已存在且内容一致：{dated_path.name}，跳过复制。 / "
+                      f"Backup exists and matches: {dated_path.name}, skipping copy.")
             else:
                 # 仅覆盖，不新建额外文件
                 atomic_copy(base_path, dated_path)
-                print(f"[更新] 已覆盖备份：{dated_path.name}")
+                print(f"[更新] 已覆盖备份：{dated_path.name} / Backup overwritten: {dated_path.name}")
         else:
             # 首次生成今日备份
             atomic_copy(base_path, dated_path)
-            print(f"[创建] 已生成备份：{dated_path.name}")
+            print(f"[创建] 已生成备份：{dated_path.name} / Backup created: {dated_path.name}")
 
     # 2) 刷新原始文件的数据源并保存
     excel = win32.DispatchEx("Excel.Application")
@@ -94,7 +96,7 @@ try:
         except Exception:
             pass
         wb.Save()
-        print(f"[刷新] 已刷新并保存：{BASE_NAME}")
+        print(f"[刷新] 已刷新并保存：{BASE_NAME} / Refreshed and saved: {BASE_NAME}")
     finally:
         wb.Close(SaveChanges=False)
         excel.Quit()
