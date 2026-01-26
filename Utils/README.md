@@ -24,3 +24,32 @@
 4) 若提供 archive_dir，使用文件检测模式监控输出目录。
 5) 文件检测成功即返回；否则超时回退等待模式。
 6) 支持蜂鸣提示与打开输出目录。
+
+---
+
+# Utils Notes (EN)
+
+This folder contains reusable helpers used by Weekly/M1M2 scripts.
+
+## graph_mail_attachment_tool.py
+Downloads mail attachments via Microsoft Graph with token caching.
+
+Steps:
+1) Load local token cache; use if valid.
+2) If invalid, try refresh_token.
+3) If refresh fails, use Device Code flow to obtain token.
+4) Fetch message list (optional folder filter, day range, paging/scan limits).
+5) Read attachment metadata and filter by keyword/exact name/extension.
+6) Download content (contentBytes or $value) and rename by received time.
+7) Return saved file paths (newest → oldest).
+
+## sql_agent_tool.py
+Triggers a SQL Server Agent Job and waits for completion (file-watch first).
+
+Steps:
+1) Resolve job name (supports fuzzy matching).
+2) Resolve/validate start_step (step_id → step_name, or step_name directly).
+3) Start job (sp_start_job supports step_name only).
+4) If archive_dir is provided, use file-watch mode on output folder.
+5) Return on file detection; otherwise fall back to timeout wait.
+6) Optional beep + open output folder.

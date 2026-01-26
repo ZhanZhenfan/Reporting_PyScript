@@ -79,3 +79,87 @@ CSV 转 XLSX 并拷贝到网络盘，最后归档原 CSV。
 3) 用 openpyxl 计算真实数据范围。
 4) 使用 Excel COM 重建工作表并保留类型/列宽。
 5) 验证 Ctrl+End 最后单元格位置并输出日志。
+
+---
+
+# M1M2 Notes (EN)
+
+This folder contains M1/M2 automation scripts. Each script corresponds to a fixed workflow.
+
+## Step1.py
+Rebuilds Excel files to avoid gencache/typelib errors.
+
+Steps:
+1) Locate the fixed file list (6 files).
+2) Monthly backup (skip if same version already backed up this month).
+3) Purge broken typelibs cache.
+4) Launch Excel via dynamic.Dispatch.
+5) Open → SaveAs temp → close → atomic replace; fallback to Save() on failure.
+6) Per-file failures do not stop others.
+
+## Step2.py
+Convert CSV to XLSX, copy to network share, then archive the CSV.
+
+Steps:
+1) Read CSV (multi-encoding fallback).
+2) Write local XLSX (text columns formatted as text).
+3) Copy to network target.
+4) Move original CSV to _processed archive.
+
+## Step4.py
+Copy data from the latest VL06O source into a template.
+
+Steps:
+1) Find latest VL06O*.xlsx in Archive.
+2) Open source and target workbooks.
+3) Clear target data region.
+4) Write mapped columns to target.
+5) Fill column L with =TRIM(A2).
+6) Save target file.
+
+## Step5.py
+Update Product_list New.xlsx headers and data.
+
+Steps:
+1) Find latest Product_List*.xlsx in PR1 reports.
+2) Read old headers (preserve duplicate names).
+3) Read new data (skip first row).
+4) Validate column count and apply old headers.
+5) Save Product_list New.xlsx.
+
+## Step8/Step8_1.py
+Clear Scrap/Machinery templates and chain subsequent steps.
+
+Steps:
+1) Find latest Scrap/Machinery files in Archive.
+2) Copy to Customs with fixed names.
+3) Clear data area (keep headers and column 1).
+4) Save and call Step8_2, Step8_3.
+
+## Step8/Step8_2.py
+Copy data from Raw files into templates and add month tags.
+
+Steps:
+1) Find latest Raw file containing keyword.
+2) Find matching template (.xlsm/.xlsx).
+3) Copy with column shift rules.
+4) Fill column 1 with previous month YYYYMM on rows with data.
+5) Save template.
+
+## Step8/Step8_3.py
+Prepare M1/M2 files and open for manual copy/compare.
+
+Steps:
+1) Find latest M1 in Raw and copy to Customs fixed name.
+2) Find latest M2 in Archive, copy to Customs fixed name, open source + target.
+3) Find latest M2 in Raw and open for manual compare.
+
+## check_excel_blank_rows.py
+Fix Excel blank rows/UsedRange issues.
+
+Steps:
+1) Fuzzy-match latest files by base name.
+2) Backup to timestamped directory.
+3) Compute true ranges with openpyxl.
+4) Rebuild sheets via Excel COM preserving types/widths.
+5) Verify Ctrl+End last cell and log results.

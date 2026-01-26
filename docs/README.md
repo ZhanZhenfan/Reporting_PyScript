@@ -6,3 +6,14 @@
 - `Utils/README.md`：通用工具类说明
 - `M1M2/README.md`：M1/M2 流程说明
 - `Weekly/README.md`：Weekly 任务说明
+
+---
+
+# Documentation Index (EN)
+
+This folder provides entry points to the script documentation.
+
+Entries:
+- `Utils/README.md`: Utilities overview
+- `M1M2/README.md`: M1/M2 workflows
+- `Weekly/README.md`: Weekly tasks
