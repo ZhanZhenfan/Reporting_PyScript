@@ -10,6 +10,7 @@ from openpyxl.utils import get_column_letter
 # ============ 引入你的两个工具类 ============
 from Utils.graph_mail_attachment_tool import GraphMailAttachmentTool
 from Utils.sql_agent_tool import SqlAgentTool
+from Utils.email_notify_tool import EmailNotifier
 # ===========================================
 
 # ----------------- 全局开关：输入源 -----------------
@@ -59,6 +60,18 @@ SQL_SERVER   = "10.80.127.71,1433"
 SQL_JOB_NAME = "Lumileds BI - SC RawMaterialEOHProjection"
 ARCHIVE_DIR  = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall\Archive"
 
+# ---- Email notify (optional) ----
+ENABLE_EMAIL_NOTIFY = os.getenv("EMAIL_NOTIFY", "0").strip().lower() in {"1", "true", "yes"}
+EMAIL_TO = os.getenv("EMAIL_NOTIFY_TO", "")
+EMAIL_CC = os.getenv("EMAIL_NOTIFY_CC", "")
+EMAIL_BCC = os.getenv("EMAIL_NOTIFY_BCC", "")
+
+# Job-specific message templates (customize per job)
+SUCCESS_SUBJECT = "MRP Waterfall Monthly - Success"
+SUCCESS_BODY = "MRP Waterfall Monthly completed successfully."
+FAIL_SUBJECT = "MRP Waterfall Monthly - Failed"
+FAIL_BODY_PREFIX = "MRP Waterfall Monthly failed with error:\n"
+
 
 # ============ 小工具 ============
 
@@ -68,6 +81,23 @@ def ensure_dir(p: str):
 def newest_file(paths: List[str]) -> Optional[str]:
     files = [p for p in paths if p and os.path.isfile(p)]
     return max(files, key=lambda p: os.path.getmtime(p)) if files else None
+
+
+def _split_emails(s: str):
+    return [x.strip() for x in re.split(r"[;,]", s or "") if x.strip()]
+
+
+def _notify(subject: str, body: str) -> None:
+    if not ENABLE_EMAIL_NOTIFY:
+        return
+    notifier = EmailNotifier.from_env()
+    notifier.send(
+        subject=subject,
+        body=body,
+        to=_split_emails(EMAIL_TO),
+        cc=_split_emails(EMAIL_CC),
+        bcc=_split_emails(EMAIL_BCC),
+    )
 
 def list_matching_files_in_dir(
     folder: str,
@@ -317,4 +347,9 @@ def main():
     print("共享盘路径：", dest, "/ Share path:", dest)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        _notify(SUCCESS_SUBJECT, SUCCESS_BODY)
+    except BaseException as e:
+        _notify(FAIL_SUBJECT, f"{FAIL_BODY_PREFIX}{e}")
+        raise

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import shutil
 import pandas as pd
@@ -6,12 +7,25 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from Utils.graph_mail_attachment_tool import GraphMailAttachmentTool
 from Utils.sql_agent_tool import SqlAgentTool
+from Utils.email_notify_tool import EmailNotifier
 
 SRC_DIR = r"\\mp1do4ce0373ndz\C\WeeklyRawFile\Download_From_Eamil"   # 你截图里的目录名我按“Eamil”写的
 SHARE_DIR = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall"
 
 # 要在作业执行完后打开的 Excel 文件
 EXCEL_MACRO_PATH = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Temp Report\03 - MY0X MRP_NEW_WATERFALL_Master - button.xlsm"
+
+# ---- Email notify (optional) ----
+ENABLE_EMAIL_NOTIFY = os.getenv("EMAIL_NOTIFY", "0").strip().lower() in {"1", "true", "yes"}
+EMAIL_TO = os.getenv("EMAIL_NOTIFY_TO", "")
+EMAIL_CC = os.getenv("EMAIL_NOTIFY_CC", "")
+EMAIL_BCC = os.getenv("EMAIL_NOTIFY_BCC", "")
+
+# Job-specific message templates (customize per job)
+SUCCESS_SUBJECT = "MRP Weekly Waterfall - Success"
+SUCCESS_BODY = "MRP Weekly Waterfall completed successfully."
+FAIL_SUBJECT = "MRP Weekly Waterfall - Failed"
+FAIL_BODY_PREFIX = "MRP Weekly Waterfall failed with error:\n"
 
 # 1) 先下载邮件附件到本地目录
 down = GraphMailAttachmentTool(
@@ -44,6 +58,23 @@ def pick_big_small(files):
     sizes = [(f, os.path.getsize(f)) for f in files]
     sizes.sort(key=lambda x: x[1], reverse=True)
     return sizes[0][0], sizes[1][0]
+
+
+def _split_emails(s: str):
+    return [x.strip() for x in re.split(r"[;,]", s or "") if x.strip()]
+
+
+def _notify(subject: str, body: str) -> None:
+    if not ENABLE_EMAIL_NOTIFY:
+        return
+    notifier = EmailNotifier.from_env()
+    notifier.send(
+        subject=subject,
+        body=body,
+        to=_split_emails(EMAIL_TO),
+        cc=_split_emails(EMAIL_CC),
+        bcc=_split_emails(EMAIL_BCC),
+    )
 
 
 # ------------ 主逻辑 ------------
@@ -129,4 +160,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        _notify(SUCCESS_SUBJECT, SUCCESS_BODY)
+    except BaseException as e:
+        _notify(FAIL_SUBJECT, f"{FAIL_BODY_PREFIX}{e}")
+        raise

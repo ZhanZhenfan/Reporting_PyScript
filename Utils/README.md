@@ -25,6 +25,15 @@
 5) 文件检测成功即返回；否则超时回退等待模式。
 6) 支持蜂鸣提示与打开输出目录。
 
+## email_notify_tool.py
+用于通过 SMTP 发送通知邮件（成功/失败等场景）。
+
+流程：
+1) 从环境变量读取 SMTP 配置（SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_USE_TLS/SMTP_FROM）。
+2) 由调用方传入 subject/body/to/cc/bcc。
+3) 建立 SMTP 连接（可选 TLS + 登录）。
+4) 发送邮件。
+
 ---
 
 # Utils Notes (EN)
@@ -53,3 +62,12 @@ Steps:
 4) If archive_dir is provided, use file-watch mode on output folder.
 5) Return on file detection; otherwise fall back to timeout wait.
 6) Optional beep + open output folder.
+
+## email_notify_tool.py
+Sends notification emails via SMTP (success/failure, etc.).
+
+Steps:
+1) Load SMTP config from environment (SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_USE_TLS/SMTP_FROM).
+2) Caller provides subject/body/to/cc/bcc.
+3) Connect to SMTP server (optional TLS + login).
+4) Send email.

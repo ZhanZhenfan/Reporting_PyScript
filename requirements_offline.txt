@@ -1,0 +1,9 @@
+# Minimal third-party requirements for this project (offline install)
+pillow
+openpyxl
+pandas
+pyodbc
+pywin32
+requests
+urllib3
+xlsxwriter
