@@ -65,6 +65,14 @@ class EmailNotifier:
             return {}
 
     @classmethod
+    def is_enabled(cls, config_path: str | None = None) -> bool:
+        cfg_path = config_path or os.getenv("EMAIL_NOTIFY_CONFIG") or cls._default_config_path()
+        cfg = cls._load_json(cfg_path)
+        if isinstance(cfg, dict) and "enabled" in cfg:
+            return bool(cfg.get("enabled"))
+        return True
+
+    @classmethod
     def from_env(cls) -> "EmailNotifier":
         """
         Load SMTP config from environment:

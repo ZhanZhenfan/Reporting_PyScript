@@ -1,4 +1,5 @@
 {
+  "enabled": true,
   "smtp": {
     "host": "relay-apac.corp.lumileds.org",
     "port": 25,

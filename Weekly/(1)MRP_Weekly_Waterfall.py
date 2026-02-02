@@ -15,7 +15,6 @@ SHARE_DIR = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Sourc
 EXCEL_MACRO_PATH = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Temp Report\03 - MY0X MRP_NEW_WATERFALL_Master - button.xlsm"
 
 # ---- Email notify (optional) ----
-ENABLE_EMAIL_NOTIFY = os.getenv("EMAIL_NOTIFY", "0").strip().lower() in {"1", "true", "yes"}
 JOB_KEY = "MRP_Weekly_Waterfall"
 
 # Job-specific message templates (customize per job)
@@ -58,7 +57,7 @@ def pick_big_small(files):
 
 
 def _notify(subject: str, body: str) -> None:
-    if not ENABLE_EMAIL_NOTIFY:
+    if not EmailNotifier.is_enabled():
         return
     notifier = EmailNotifier.from_config()
     notifier.send_with_config(

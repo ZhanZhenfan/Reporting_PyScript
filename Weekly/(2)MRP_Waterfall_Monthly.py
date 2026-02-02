@@ -61,7 +61,6 @@ SQL_JOB_NAME = "Lumileds BI - SC RawMaterialEOHProjection"
 ARCHIVE_DIR  = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data Source\SAP\Transactional Data\MRP Waterfall\Archive"
 
 # ---- Email notify (optional) ----
-ENABLE_EMAIL_NOTIFY = os.getenv("EMAIL_NOTIFY", "0").strip().lower() in {"1", "true", "yes"}
 JOB_KEY = "MRP_Waterfall_Monthly"
 
 # Job-specific message templates (customize per job)
@@ -82,7 +81,7 @@ def newest_file(paths: List[str]) -> Optional[str]:
 
 
 def _notify(subject: str, body: str) -> None:
-    if not ENABLE_EMAIL_NOTIFY:
+    if not EmailNotifier.is_enabled():
         return
     notifier = EmailNotifier.from_config()
     notifier.send_with_config(
