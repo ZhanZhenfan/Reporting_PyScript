@@ -29,8 +29,8 @@
 用于通过 SMTP 发送通知邮件（成功/失败等场景）。
 
 流程：
-1) 从环境变量读取 SMTP 配置（SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_USE_TLS/SMTP_FROM）。
-2) 由调用方传入 subject/body/to/cc/bcc。
+1) 从 email_notify_config.json 读取 SMTP 配置与默认/按 job 配置的收件人。
+2) 由调用方传入 subject/body（收件人走配置或默认）。
 3) 建立 SMTP 连接（可选 TLS + 登录）。
 4) 发送邮件。
 
@@ -67,7 +67,7 @@ Steps:
 Sends notification emails via SMTP (success/failure, etc.).
 
 Steps:
-1) Load SMTP config from environment (SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_USE_TLS/SMTP_FROM).
-2) Caller provides subject/body/to/cc/bcc.
+1) Load SMTP config and recipients from email_notify_config.json (default + per job overrides).
+2) Caller provides subject/body (recipients resolved from config or defaults).
 3) Connect to SMTP server (optional TLS + login).
 4) Send email.

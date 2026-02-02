@@ -1,4 +1,12 @@
 {
+  "smtp": {
+    "host": "relay-apac.corp.lumileds.org",
+    "port": 25,
+    "use_tls": false,
+    "user": "",
+    "password": "",
+    "from_addr": "NoReply@Lumileds.com"
+  },
   "default": {
     "to": [
       "Haibo.Zhang@lumileds.com",

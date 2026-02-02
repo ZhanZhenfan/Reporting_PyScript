@@ -84,7 +84,7 @@ def newest_file(paths: List[str]) -> Optional[str]:
 def _notify(subject: str, body: str) -> None:
     if not ENABLE_EMAIL_NOTIFY:
         return
-    notifier = EmailNotifier.from_env()
+    notifier = EmailNotifier.from_config()
     notifier.send_with_config(
         job_key=JOB_KEY,
         subject=subject,

@@ -85,6 +85,30 @@ class EmailNotifier:
         from_addr = os.getenv("SMTP_FROM") or user
         return cls(SmtpConfig(host=host, port=port, user=user, password=password, use_tls=use_tls, from_addr=from_addr))
 
+    @classmethod
+    def from_config(cls, config_path: str | None = None) -> "EmailNotifier":
+        """
+        Load SMTP config from JSON config:
+          smtp.host (required)
+          smtp.port (default 25)
+          smtp.user
+          smtp.password
+          smtp.use_tls (default false)
+          smtp.from_addr (default smtp.user or empty)
+        """
+        cfg_path = config_path or os.getenv("EMAIL_NOTIFY_CONFIG") or cls._default_config_path()
+        cfg = cls._load_json(cfg_path)
+        smtp = cfg.get("smtp", {}) if isinstance(cfg, dict) else {}
+        host = (smtp.get("host") or "").strip()
+        if not host:
+            raise ValueError("smtp.host is required in email_notify_config.json")
+        port = int(smtp.get("port") or 25)
+        user = smtp.get("user")
+        password = smtp.get("password")
+        use_tls = bool(smtp.get("use_tls")) if "use_tls" in smtp else False
+        from_addr = smtp.get("from_addr") or user
+        return cls(SmtpConfig(host=host, port=port, user=user, password=password, use_tls=use_tls, from_addr=from_addr))
+
     def _resolve_recipients(self, job_key: str | None, config_path: str | None = None) -> tuple[list[str], list[str], list[str]]:
         cfg_path = config_path or os.getenv("EMAIL_NOTIFY_CONFIG") or self._default_config_path()
         cfg = self._load_json(cfg_path)
