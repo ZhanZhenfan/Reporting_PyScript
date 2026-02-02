@@ -62,9 +62,7 @@ ARCHIVE_DIR  = r"\\mygbynbyn1msis1\Supply-Chain-Analytics\Data Warehouse\Data So
 
 # ---- Email notify (optional) ----
 ENABLE_EMAIL_NOTIFY = os.getenv("EMAIL_NOTIFY", "0").strip().lower() in {"1", "true", "yes"}
-EMAIL_TO = os.getenv("EMAIL_NOTIFY_TO", "")
-EMAIL_CC = os.getenv("EMAIL_NOTIFY_CC", "")
-EMAIL_BCC = os.getenv("EMAIL_NOTIFY_BCC", "")
+JOB_KEY = "MRP_Waterfall_Monthly"
 
 # Job-specific message templates (customize per job)
 SUCCESS_SUBJECT = "MRP Waterfall Monthly - Success"
@@ -83,20 +81,14 @@ def newest_file(paths: List[str]) -> Optional[str]:
     return max(files, key=lambda p: os.path.getmtime(p)) if files else None
 
 
-def _split_emails(s: str):
-    return [x.strip() for x in re.split(r"[;,]", s or "") if x.strip()]
-
-
 def _notify(subject: str, body: str) -> None:
     if not ENABLE_EMAIL_NOTIFY:
         return
     notifier = EmailNotifier.from_env()
-    notifier.send(
+    notifier.send_with_config(
+        job_key=JOB_KEY,
         subject=subject,
         body=body,
-        to=_split_emails(EMAIL_TO),
-        cc=_split_emails(EMAIL_CC),
-        bcc=_split_emails(EMAIL_BCC),
     )
 
 def list_matching_files_in_dir(

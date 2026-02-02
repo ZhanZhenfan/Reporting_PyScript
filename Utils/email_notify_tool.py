@@ -29,6 +29,13 @@ def _to_list(v: Optional[Iterable[str]]) -> List[str]:
     return [s for s in v if s]
 
 
+DEFAULT_TO = [
+    "Haibo.Zhang@lumileds.com",
+    "Zhenfan.Zhan@lumileds.com",
+    "lalitha.namburi@lumileds.com",
+]
+
+
 @dataclass
 class SmtpConfig:
     host: str
@@ -42,6 +49,20 @@ class SmtpConfig:
 class EmailNotifier:
     def __init__(self, cfg: SmtpConfig):
         self.cfg = cfg
+
+    @staticmethod
+    def _default_config_path() -> str:
+        here = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(here, "email_notify_config.json")
+
+    @staticmethod
+    def _load_json(path: str) -> dict:
+        try:
+            import json
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
 
     @classmethod
     def from_env(cls) -> "EmailNotifier":
@@ -63,6 +84,26 @@ class EmailNotifier:
         use_tls = os.getenv("SMTP_USE_TLS", "true").strip().lower() not in {"0", "false", "no"}
         from_addr = os.getenv("SMTP_FROM") or user
         return cls(SmtpConfig(host=host, port=port, user=user, password=password, use_tls=use_tls, from_addr=from_addr))
+
+    def _resolve_recipients(self, job_key: str | None, config_path: str | None = None) -> tuple[list[str], list[str], list[str]]:
+        cfg_path = config_path or os.getenv("EMAIL_NOTIFY_CONFIG") or self._default_config_path()
+        cfg = self._load_json(cfg_path)
+        default_cfg = cfg.get("default", {}) if isinstance(cfg, dict) else {}
+        jobs_cfg = cfg.get("jobs", {}) if isinstance(cfg, dict) else {}
+        job_cfg = jobs_cfg.get(job_key, {}) if job_key and isinstance(jobs_cfg, dict) else {}
+
+        def _get_list(key: str, fallback: list[str]) -> list[str]:
+            val = job_cfg.get(key) if isinstance(job_cfg, dict) else None
+            if val is None:
+                val = default_cfg.get(key) if isinstance(default_cfg, dict) else None
+            if val is None:
+                return fallback
+            return _to_list(val)
+
+        to_list = _get_list("to", DEFAULT_TO)
+        cc_list = _get_list("cc", [])
+        bcc_list = _get_list("bcc", [])
+        return to_list, cc_list, bcc_list
 
     def send(
         self,
@@ -96,3 +137,15 @@ class EmailNotifier:
             if self.cfg.user and self.cfg.password:
                 s.login(self.cfg.user, self.cfg.password)
             s.send_message(msg, from_addr=self.cfg.from_addr, to_addrs=all_rcpt)
+
+    def send_with_config(
+        self,
+        *,
+        job_key: str,
+        subject: str,
+        body: str,
+        config_path: str | None = None,
+        subtype: str = "plain",
+    ) -> None:
+        to_list, cc_list, bcc_list = self._resolve_recipients(job_key, config_path=config_path)
+        self.send(subject=subject, body=body, to=to_list, cc=cc_list, bcc=bcc_list, subtype=subtype)

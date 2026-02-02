@@ -1,0 +1,12 @@
+{
+  "default": {
+    "to": [
+      "Haibo.Zhang@lumileds.com",
+      "Zhenfan.Zhan@lumileds.com",
+      "lalitha.namburi@lumileds.com"
+    ],
+    "cc": [],
+    "bcc": []
+  },
+  "jobs": {}
+}
